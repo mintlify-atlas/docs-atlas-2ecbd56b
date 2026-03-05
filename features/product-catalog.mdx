@@ -1,0 +1,222 @@
+---
+title: "Product Catalog"
+description: "Browse and discover vintage jewelry with advanced filtering and beautiful product displays"
+---
+
+The Product Catalog is the heart of Rubik's Vintage, providing customers with an elegant browsing experience to discover unique vintage jewelry pieces.
+
+## Overview
+
+The catalog system combines beautiful visual presentation with powerful filtering capabilities, making it easy for customers to find exactly what they're looking for.
+
+<CardGroup cols={2}>
+  <Card title="Dynamic Filtering" icon="filter">
+    Filter products by category with real-time updates
+  </Card>
+  <Card title="Quick View" icon="eye">
+    Preview product details without leaving the catalog
+  </Card>
+  <Card title="Responsive Grid" icon="grid">
+    Adapts from 2 to 4 columns based on screen size
+  </Card>
+  <Card title="Product Details" icon="info">
+    Rich product pages with images, descriptions, and related items
+  </Card>
+</CardGroup>
+
+## Catalog Display
+
+The main products page (`/products`) displays all available jewelry in a responsive grid layout.
+
+### Key Features
+
+**Visual Hierarchy**
+- Full-width header with "Shop the Collection" branding
+- Category filter bar with elegant typography
+- Responsive grid: 2 columns (mobile) → 3 columns (tablet) → 4 columns (desktop)
+
+**Product Cards**
+Each product card includes:
+- High-quality product image with hover zoom effect
+- Product name in uppercase tracking
+- Price displayed in MXN currency
+- Quick View overlay on hover
+
+<Tip>
+  The hover effect adds a "Vista Rápida" (Quick View) button overlay, enhancing the browsing experience without requiring page navigation.
+</Tip>
+
+## Category Filtering
+
+Customers can filter the catalog by product categories dynamically.
+
+### How It Works
+
+1. **Category Bar**: Displays all available categories plus an "Todos" (All) option
+2. **Active State**: Selected category shows underline and bold styling
+3. **Real-time Filtering**: Products update instantly when a category is selected
+4. **Category Data**: Categories are loaded from the Supabase `categories` table
+
+```jsx
+// Categories are fetched and displayed dynamically
+const categories = ["Todos", "Anillos", "Collares", "Pulseras", "Aretes"]
+```
+
+<Note>
+  The filtering happens client-side for instant updates, but products are loaded with their category relationships from the database.
+</Note>
+
+## Quick View Modal
+
+The Quick View feature allows customers to preview products without leaving the catalog page.
+
+### Features
+
+**Modal Layout**
+- Split screen design: image on left, details on right
+- Full-screen overlay with backdrop blur
+- Image gallery support (if multiple images exist)
+- Responsive: stacks vertically on mobile
+
+**Product Information**
+- Category badge
+- Product name in elegant serif italic font
+- Price in large, readable format
+- Product description
+- "Add to Cart" button
+- Link to full product details page
+
+**Image Gallery**
+- Navigation arrows for multiple images
+- Smooth transitions between images
+- Full-height image display
+
+<Tip>
+  The Quick View modal includes navigation chevrons when a product has multiple images, allowing customers to browse all photos without opening the full product page.
+</Tip>
+
+## Product Detail Pages
+
+Each product has a dedicated detail page (`/products/[id]`) with comprehensive information.
+
+### Page Structure
+
+**Hero Section**
+- Large product image (4:5 aspect ratio)
+- Image zoom on hover
+- Breadcrumb navigation (Collection → Category)
+
+**Product Information**
+- Product name (large serif italic heading)
+- Price with MXN currency formatting
+- Full product description
+- "Add to Cart" button with quantity control
+
+**Product Details**
+<CardGroup cols={2}>
+  <Card title="Material Info" icon="sparkles">
+    18k gold-plated with artisan finish details
+  </Card>
+  <Card title="Measurements" icon="ruler">
+    Adjustable standard design for maximum comfort
+  </Card>
+  <Card title="Secure Shipping" icon="truck">
+    Insured delivery information
+  </Card>
+  <Card title="Certified Quality" icon="shield-check">
+    Quality certification badge
+  </Card>
+</CardGroup>
+
+**Related Products**
+- Shows 4 related products from the same category
+- Excludes the current product
+- Displayed in a responsive grid
+- "Complete the look" section heading
+
+## Data Loading
+
+Products are loaded from Supabase with efficient queries:
+
+```javascript
+// Main catalog query
+supabase
+  .from('products')
+  .select('*, categories(name)')
+  .order('created_at', { ascending: false })
+
+// Single product with category
+supabase
+  .from('products')
+  .select('*, categories(name)')
+  .eq('id', productId)
+  .single()
+
+// Related products
+supabase
+  .from('products')
+  .select('*, categories(name)')
+  .eq('category_id', categoryId)
+  .neq('id', currentProductId)
+  .limit(4)
+```
+
+<Note>
+  All product queries include the category relationship using Supabase's join syntax, ensuring category names are available without additional queries.
+</Note>
+
+## Loading States
+
+The catalog includes elegant loading indicators:
+
+- **Initial Load**: Animated spinner in brand colors (gold)
+- **No Results**: Friendly italic message when filters return no products
+- **Empty State**: "No se encontraron piezas" message with category name
+
+## Design System
+
+The catalog uses a sophisticated vintage aesthetic:
+
+**Colors**
+- Background: `#F5F1EB` (warm cream)
+- Accent: `#C4A95E` (vintage gold)
+- Price: `#A07F3A` (darker gold)
+- Text: Black with various opacity levels
+
+**Typography**
+- Product names: Uppercase with wide tracking
+- Prices: Serif italic font
+- Headers: Large serif italic for elegance
+- Body: Light weight for readability
+
+**Spacing**
+- Generous white space
+- Large section padding (pt-32 on hero)
+- Consistent gap spacing in grids
+
+## User Experience Benefits
+
+<CardGroup cols={2}>
+  <Card title="Fast Browsing" icon="zap">
+    Quick View lets customers preview multiple products without page loads
+  </Card>
+  <Card title="Easy Navigation" icon="compass">
+    Category filters and breadcrumbs keep users oriented
+  </Card>
+  <Card title="Visual Appeal" icon="image">
+    High-quality images with elegant hover effects
+  </Card>
+  <Card title="Discovery" icon="sparkles">
+    Related products section encourages exploration
+  </Card>
+</CardGroup>
+
+## Mobile Optimization
+
+The catalog is fully responsive:
+
+- 2-column grid on mobile devices
+- Horizontal scrollable category bar
+- Touch-optimized Quick View modal
+- Stacked layout on product detail pages
+- Large tap targets for easy interaction

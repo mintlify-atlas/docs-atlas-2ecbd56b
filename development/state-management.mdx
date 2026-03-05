@@ -1,0 +1,445 @@
+---
+title: 'State Management'
+description: 'Shopping cart state with React Context and localStorage persistence'
+---
+
+## Overview
+
+Rubik's Vintage uses **React Context API** for global state management, specifically for the shopping cart. Cart state persists across page refreshes using browser localStorage.
+
+## CartContext
+
+**Location:** `context/CartContext.jsx`
+
+Provides global cart state and operations to the entire application.
+
+### Full Implementation
+
+```jsx
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext();
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('zalea_cart');
+    if (saved) {
+      try {
+        setCart(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error en ZÁLEA Cart:', e);
+      }
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Persist cart to localStorage on changes
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('zalea_cart', JSON.stringify(cart));
+    }
+  }, [cart, isLoaded]);
+
+  const addToCart = (product) => {
+    setCart((prev) => {
+      const existing = prev.find((item) => item.id === product.id);
+      if (existing) {
+        return prev.map((item) =>
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prev, { ...product, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const removeFromCart = (id) => {
+    setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateQuantity = (id, quantity) => {
+    if (quantity <= 0) {
+      removeFromCart(id);
+      return;
+    }
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity } : item
+      )
+    );
+  };
+
+  const clearCart = () => setCart([]);
+
+  const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const cartTotal = cart.reduce(
+    (total, item) => total + item.base_price * item.quantity,
+    0
+  );
+
+  return (
+    <CartContext.Provider
+      value={{
+        cart,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        cartCount,
+        cartTotal,
+        isCartOpen,
+        setIsCartOpen,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export const useCart = () => useContext(CartContext);
+```
+
+## Context Values
+
+### State
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `cart` | `Array<CartItem>` | Array of cart items |
+| `cartCount` | `number` | Total quantity of items |
+| `cartTotal` | `number` | Total price in MXN |
+| `isCartOpen` | `boolean` | Cart sidebar visibility state |
+
+### Actions
+
+| Method | Parameters | Description |
+|--------|-----------|-------------|
+| `addToCart` | `product: Product` | Add product to cart (increments if exists) |
+| `removeFromCart` | `id: string` | Remove item from cart |
+| `updateQuantity` | `id: string, quantity: number` | Update item quantity |
+| `clearCart` | None | Remove all items from cart |
+| `setIsCartOpen` | `open: boolean` | Toggle cart sidebar |
+
+### Types
+
+```typescript
+interface CartItem {
+  id: string;
+  name: string;
+  image_url: string;
+  base_price: number;
+  quantity: number;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  image_url: string;
+  base_price: number;
+  description?: string;
+}
+```
+
+## Usage
+
+### 1. Wrap Application with Provider
+
+**Location:** `app/layout.tsx` or root layout
+
+```jsx
+import { CartProvider } from '@/context/CartContext';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <CartProvider>
+          {children}
+        </CartProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### 2. Consume Cart State in Components
+
+```jsx
+'use client';
+import { useCart } from '@/context/CartContext';
+
+export default function AddToCartButton({ product }) {
+  const { addToCart } = useCart();
+
+  return (
+    <button onClick={() => addToCart(product)}>
+      Add to Cart
+    </button>
+  );
+}
+```
+
+### 3. Display Cart Count
+
+```jsx
+'use client';
+import { useCart } from '@/context/CartContext';
+import { ShoppingBag } from 'lucide-react';
+
+export default function CartIcon() {
+  const { cartCount, setIsCartOpen } = useCart();
+
+  return (
+    <button onClick={() => setIsCartOpen(true)} className="relative">
+      <ShoppingBag size={20} />
+      {cartCount > 0 && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
+          {cartCount}
+        </span>
+      )}
+    </button>
+  );
+}
+```
+
+### 4. Display Cart Items
+
+```jsx
+'use client';
+import { useCart } from '@/context/CartContext';
+
+export default function CartList() {
+  const { cart, removeFromCart, updateQuantity, cartTotal } = useCart();
+
+  return (
+    <div>
+      {cart.map((item) => (
+        <div key={item.id}>
+          <h3>{item.name}</h3>
+          <p>${item.base_price} MXN</p>
+          <input
+            type="number"
+            value={item.quantity}
+            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value))}
+          />
+          <button onClick={() => removeFromCart(item.id)}>Remove</button>
+        </div>
+      ))}
+      <p>Total: ${cartTotal.toLocaleString()} MXN</p>
+    </div>
+  );
+}
+```
+
+## LocalStorage Persistence
+
+### Storage Key
+
+```
+zalea_cart
+```
+
+### Data Format
+
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Collar Vintage Gold",
+    "image_url": "https://...",
+    "base_price": 599.00,
+    "quantity": 2
+  }
+]
+```
+
+### Persistence Logic
+
+1. **On Mount** - Load cart from `localStorage.getItem('zalea_cart')`
+2. **On Change** - Save cart to `localStorage.setItem('zalea_cart', JSON.stringify(cart))`
+3. **On Error** - Gracefully handle JSON parse errors
+
+### Clear Cart Data
+
+```javascript
+localStorage.removeItem('zalea_cart');
+```
+
+## Cart Operations
+
+### Add Product
+
+```javascript
+const addToCart = (product) => {
+  setCart((prev) => {
+    const existing = prev.find((item) => item.id === product.id);
+    if (existing) {
+      // Increment quantity if already in cart
+      return prev.map((item) =>
+        item.id === product.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      );
+    }
+    // Add new item with quantity 1
+    return [...prev, { ...product, quantity: 1 }];
+  });
+  setIsCartOpen(true); // Auto-open cart
+};
+```
+
+**Key Features:**
+- Increments quantity for existing items
+- Adds new items with quantity 1
+- Automatically opens cart sidebar
+
+### Update Quantity
+
+```javascript
+const updateQuantity = (id, quantity) => {
+  if (quantity <= 0) {
+    removeFromCart(id);
+    return;
+  }
+  setCart((prev) =>
+    prev.map((item) =>
+      item.id === id ? { ...item, quantity } : item
+    )
+  );
+};
+```
+
+**Key Features:**
+- Removes item if quantity is 0 or less
+- Updates quantity for specific item
+
+### Calculate Totals
+
+```javascript
+const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+const cartTotal = cart.reduce(
+  (total, item) => total + item.base_price * item.quantity,
+  0
+);
+```
+
+**Computed Values:**
+- `cartCount` - Sum of all item quantities
+- `cartTotal` - Sum of all item prices × quantities
+
+## Best Practices
+
+### 1. Always Use the Hook
+
+```jsx
+// ✅ Good
+const { cart, addToCart } = useCart();
+
+// ❌ Bad - Direct context import
+import { CartContext } from '@/context/CartContext';
+const cart = useContext(CartContext);
+```
+
+### 2. Client Components Only
+
+```jsx
+// ✅ Good
+'use client';
+import { useCart } from '@/context/CartContext';
+
+// ❌ Bad - useCart in Server Component
+import { useCart } from '@/context/CartContext'; // Error!
+```
+
+### 3. Handle Loading State
+
+```jsx
+const { cart, isLoaded } = useCart();
+
+if (!isLoaded) {
+  return <div>Loading cart...</div>;
+}
+```
+
+### 4. Clear Cart After Checkout
+
+```jsx
+const { clearCart } = useCart();
+
+useEffect(() => {
+  if (paymentSuccess) {
+    clearCart();
+  }
+}, [paymentSuccess]);
+```
+
+## Integration with API Routes
+
+### Checkout Flow
+
+```jsx
+'use client';
+import { useCart } from '@/context/CartContext';
+import { useState } from 'react';
+
+export default function CheckoutButton() {
+  const { cart, clearCart } = useCart();
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart,
+          customerData: { /* ... */ },
+        }),
+      });
+      
+      const { url } = await res.json();
+      window.location.href = url; // Redirect to Stripe
+    } catch (error) {
+      console.error('Checkout error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleCheckout} disabled={loading}>
+      {loading ? 'Processing...' : 'Checkout'}
+    </button>
+  );
+}
+```
+
+## Testing
+
+### Mock CartContext in Tests
+
+```jsx
+import { CartProvider } from '@/context/CartContext';
+import { render } from '@testing-library/react';
+
+const wrapper = ({ children }) => (
+  <CartProvider>{children}</CartProvider>
+);
+
+render(<YourComponent />, { wrapper });
+```
+
+## Next Steps
+
+- [Components](/development/components) - CartSidebar implementation
+- [API Routes](/development/api-routes) - Checkout API integration
+- [Payment Processing](/development/payment-processing) - Complete checkout flow

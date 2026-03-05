@@ -1,0 +1,233 @@
+---
+title: Complete Setup Guide
+description: Configure Supabase and Stripe for production deployment
+---
+
+This guide walks you through the complete setup process for Rubik's Vintage, including database configuration, authentication setup, and payment integration.
+
+## Overview
+
+Rubik's Vintage requires configuration for:
+
+1. **Supabase** - Database and authentication
+2. **Stripe** - Payment processing
+3. **Environment Variables** - Configuration settings
+
+<Note>
+  If you just want to run the app locally for development, check out the [Quick Start](/quickstart) guide instead.
+</Note>
+
+## Supabase Setup
+
+<Steps>
+  <Step title="Create a Supabase project">
+    1. Go to [supabase.com](https://supabase.com) and sign up or log in
+    2. Click **New Project**
+    3. Fill in your project details:
+       - **Name**: Rubiks Vintage
+       - **Database Password**: Choose a strong password
+       - **Region**: Select the closest region to your users
+    4. Click **Create new project**
+    
+    <Tip>Save your database password - you'll need it for direct database access.</Tip>
+  </Step>
+
+  <Step title="Get your API credentials">
+    Once your project is created:
+
+    1. Go to **Project Settings** → **API**
+    2. Copy the following values:
+       - **Project URL** - This is your `NEXT_PUBLIC_SUPABASE_URL`
+       - **anon public** key - This is your `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+       - **service_role** key - This is your `SUPABASE_SERVICE_ROLE_KEY`
+    
+    <Warning>
+      The service role key bypasses Row Level Security. Never expose it to clients or commit it to version control.
+    </Warning>
+  </Step>
+
+  <Step title="Create database tables">
+    You need to create the database schema for Rubik's Vintage. See the [Database Setup](/deployment/database-setup) guide for complete SQL scripts.
+
+    The required tables are:
+    - `profiles` - User profiles
+    - `categories` - Product categories
+    - `products` - Product catalog
+    - `orders` - Customer orders
+    - `item_order` - Order line items
+    - `store_config` - Store settings
+
+    <Info>
+      You can run the SQL scripts in the Supabase SQL Editor (**SQL Editor** → **New query**).
+    </Info>
+  </Step>
+
+  <Step title="Configure authentication">
+    Enable email/password authentication:
+
+    1. Go to **Authentication** → **Providers**
+    2. Ensure **Email** is enabled
+    3. Configure email templates if desired
+    4. Set up redirect URLs for your domain
+
+    <Tip>
+      For production, configure email templates under **Authentication** → **Email Templates** to match your brand.
+    </Tip>
+  </Step>
+
+  <Step title="Set up storage">
+    Create a storage bucket for product images:
+
+    1. Go to **Storage**
+    2. Click **Create a new bucket**
+    3. Name it `product_images`
+    4. Set it to **Public**
+    5. Configure upload policies as needed
+  </Step>
+</Steps>
+
+## Stripe Setup
+
+<Steps>
+  <Step title="Create a Stripe account">
+    1. Go to [stripe.com](https://stripe.com) and sign up
+    2. Complete your account setup
+    3. Verify your email address
+    
+    <Note>
+      You can use test mode for development without full account verification.
+    </Note>
+  </Step>
+
+  <Step title="Get your API keys">
+    1. Go to **Developers** → **API keys**
+    2. Copy your keys:
+       - **Publishable key** - This is your `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+       - **Secret key** - This is your `STRIPE_SECRET_KEY`
+    
+    For development, use **test mode** keys (they start with `pk_test_` and `sk_test_`).
+
+    <Warning>
+      Never expose your secret key in client-side code. It should only be used in API routes.
+    </Warning>
+  </Step>
+
+  <Step title="Configure checkout settings">
+    1. Go to **Settings** → **Checkout settings**
+    2. Configure your business name and branding
+    3. Set up your customer communication preferences
+    4. Enable automatic tax calculation if needed
+  </Step>
+
+  <Step title="Set up webhooks (optional)">
+    For production deployments, configure webhooks to handle payment events:
+
+    1. Go to **Developers** → **Webhooks**
+    2. Click **Add endpoint**
+    3. Enter your webhook URL: `https://yourdomain.com/api/webhooks/stripe`
+    4. Select events to listen to: `checkout.session.completed`, `payment_intent.succeeded`
+    
+    <Info>
+      Webhooks ensure you're notified of payment status changes even if the user closes their browser.
+    </Info>
+  </Step>
+</Steps>
+
+## Environment Configuration
+
+Create a `.env.local` file in your project root with all required variables:
+
+```bash .env.local
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+
+# Stripe Configuration  
+STRIPE_SECRET_KEY=sk_test_your-stripe-secret-key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key
+
+# Application Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+For production, update `NEXT_PUBLIC_APP_URL` to your actual domain.
+
+<Tip>
+  See the [Environment Variables](/deployment/environment-variables) guide for detailed descriptions of each variable.
+</Tip>
+
+## Testing Your Setup
+
+<Steps>
+  <Step title="Start the development server">
+    ```bash
+    npm run dev
+    ```
+  </Step>
+
+  <Step title="Test database connection">
+    Visit the homepage at `http://localhost:3000`. If products load (or you see an empty state), your Supabase connection is working.
+  </Step>
+
+  <Step title="Test authentication">
+    1. Navigate to `/login`
+    2. Create a new account
+    3. Check that the user appears in **Supabase Dashboard** → **Authentication** → **Users**
+  </Step>
+
+  <Step title="Test Stripe integration">
+    1. Add a product to your cart
+    2. Go to checkout
+    3. Use a [Stripe test card](https://stripe.com/docs/testing#cards):
+       - Card: `4242 4242 4242 4242`
+       - Expiry: Any future date
+       - CVC: Any 3 digits
+    4. Complete the checkout
+    5. Verify the order appears in your database
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="/deployment/database-setup">
+    Complete database schema and RLS policies
+  </Card>
+  <Card title="Deployment Guide" icon="rocket" href="/deployment/deployment-guide">
+    Deploy to production with Vercel
+  </Card>
+  <Card title="Admin Guide" icon="user-shield" href="/admin/getting-started">
+    Learn how to manage your store
+  </Card>
+  <Card title="Environment Variables" icon="key" href="/deployment/environment-variables">
+    Complete environment variable reference
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Can't connect to Supabase">
+    - Verify your project URL and keys are correct
+    - Check that your Supabase project is active (not paused)
+    - Ensure you're using the correct project (check the project ref in the URL)
+  </Accordion>
+
+  <Accordion title="Database tables not found">
+    You need to create the database schema first. Run the SQL scripts from the [Database Setup](/deployment/database-setup) guide in your Supabase SQL Editor.
+  </Accordion>
+
+  <Accordion title="Stripe checkout not working">
+    - Ensure you're using test mode keys during development
+    - Verify `NEXT_PUBLIC_APP_URL` matches your current URL
+    - Check browser console for errors
+    - Make sure your Stripe account is active
+  </Accordion>
+
+  <Accordion title="Images not uploading">
+    - Verify the `product_images` storage bucket exists in Supabase
+    - Check that the bucket is set to **Public**
+    - Ensure storage policies allow uploads (see [Database Setup](/deployment/database-setup))
+  </Accordion>
+</AccordionGroup>

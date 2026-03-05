@@ -1,0 +1,103 @@
+---
+title: "Getting Started with Admin"
+description: "Learn how to access and set up your Rubik's Vintage admin panel"
+---
+
+Welcome to Rubik's Vintage admin panel! This guide will help you get started with managing your vintage jewelry e-commerce store.
+
+## Accessing the Admin Panel
+
+The admin panel is a secure area where you can manage products, orders, customers, and store settings.
+
+<Steps>
+  <Step title="Navigate to Admin URL">
+    Access your admin panel at `/dashboard` on your Rubik's Vintage domain.
+  </Step>
+  
+  <Step title="Log In with Credentials">
+    Enter your admin email and password. Make sure you have an account with admin privileges.
+  </Step>
+  
+  <Step title="Verify Authentication">
+    The system uses Supabase authentication to ensure secure access. Only authorized users can access admin features.
+  </Step>
+</Steps>
+
+## First-Time Setup
+
+After logging in for the first time, complete these initial setup steps:
+
+<Steps>
+  <Step title="Update Your Profile">
+    Navigate to **Settings** and update your admin profile with your name and contact information.
+  </Step>
+  
+  <Step title="Configure Store Details">
+    In the **Settings** section, set up your store information:
+    - Store name (Nombre del Bazar)
+    - Contact email
+    - Shipping fee (Costo de Envío)
+    - Announcement bar text
+  </Step>
+  
+  <Step title="Add Your First Product">
+    Go to **Inventory** and click **"Nueva Pieza"** (New Product) to add your first vintage jewelry piece. See [Managing Products](/admin/products) for details.
+  </Step>
+  
+  <Step title="Review Dashboard">
+    Return to the **Dashboard** to see your store overview and metrics.
+  </Step>
+</Steps>
+
+## Understanding the Interface
+
+### Navigation Sidebar
+
+The left sidebar provides quick access to all admin sections:
+
+- **Panel de Control** (Dashboard) - Overview and metrics
+- **Gestión de Inventario** (Inventory) - Product management
+- **Gestión de Pedidos** (Orders) - Order processing
+- **Directorio de Clientes** (Customers) - Customer management
+- **Configuración** (Settings) - Store settings
+
+### Admin Theme
+
+The admin interface uses a clean, editorial design with:
+- **Serif fonts** for headings
+- **Rounded corners** on cards and buttons
+- **Color coding** for status indicators
+- **Vintage aesthetic** matching your brand
+
+<Note>
+The admin panel uses Spanish language labels ("Ingresos Totales", "Pedidos Activos", etc.) to match the Rubik's Vintage brand identity.
+</Note>
+
+## User Roles and Permissions
+
+Admin access is managed through Supabase authentication:
+
+- Only authenticated users can access admin routes
+- Profile data is stored in the `profiles` table
+- Store configuration is managed in the `store_config` table
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard Overview" icon="chart-line" href="/admin/dashboard">
+    Learn about metrics and key performance indicators
+  </Card>
+  <Card title="Managing Products" icon="box" href="/admin/products">
+    Add, edit, and organize your vintage jewelry inventory
+  </Card>
+  <Card title="Order Management" icon="shopping-bag" href="/admin/orders">
+    Process orders and manage fulfillment
+  </Card>
+  <Card title="Store Settings" icon="gear" href="/admin/settings">
+    Configure your store details and preferences
+  </Card>
+</CardGroup>
+
+<Warning>
+Keep your admin credentials secure. Never share your login information or leave your admin session open on shared computers.
+</Warning>

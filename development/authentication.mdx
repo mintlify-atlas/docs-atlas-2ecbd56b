@@ -1,0 +1,525 @@
+---
+title: 'Authentication'
+description: 'Supabase authentication implementation and protected routes'
+---
+
+## Overview
+
+Rubik's Vintage uses **Supabase Auth** for user authentication and session management. The implementation includes:
+
+- Email/password authentication
+- Protected admin routes
+- Server and client-side auth checks
+- Middleware for route protection
+- Real-time auth state monitoring
+
+## Supabase Client Configuration
+
+### Browser Client
+
+**Location:** `utils/supabase/client.js`
+
+Used in client components for browser-side operations.
+
+```javascript
+import { createBrowserClient } from '@supabase/ssr'
+
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+}
+```
+
+**Usage:**
+
+```jsx
+'use client';
+import { createClient } from '@/utils/supabase/client';
+
+export default function ClientComponent() {
+  const supabase = createClient();
+  
+  const handleLogin = async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: 'user@example.com',
+      password: 'password'
+    });
+  };
+}
+```
+
+---
+
+### Server Client
+
+**Location:** `utils/supabase/server.js`
+
+Used in server components, API routes, and server actions.
+
+```javascript
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export async function createClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {}
+        },
+      },
+    }
+  )
+}
+```
+
+**Usage in API Routes:**
+
+```javascript
+import { createClient } from '@/utils/supabase/server';
+import { NextResponse } from 'next/server';
+
+export async function GET(request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  return NextResponse.json({ user });
+}
+```
+
+## Protected Routes
+
+### Admin Layout Protection
+
+**Location:** `app/(admin)/layout.jsx`
+
+Server-side protection for all admin routes.
+
+```jsx
+import { createClient } from '@/utils/supabase/server'
+import { redirect } from 'next/navigation'
+import AdminShell from '@/components/admin/AdminShell'
+
+export default async function AdminLayout({ children }) {
+  const supabase = await createClient()
+
+  // Check if user is authenticated
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Check if user has admin privileges
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.is_admin) redirect('/')
+
+  return <AdminShell>{children}</AdminShell>
+}
+```
+
+**Protection Flow:**
+
+1. Check if user is authenticated → Redirect to `/login` if not
+2. Query user profile from database
+3. Check `is_admin` flag → Redirect to `/` if not admin
+4. Render admin interface if authorized
+
+---
+
+### Middleware Protection
+
+**Location:** `app/middleware.ts`
+
+Protects routes at the middleware level before page rendering.
+
+```typescript
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse } from 'next/server'
+
+export async function middleware(request) {
+  let supabaseResponse = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            request.cookies.set(name, value, options)
+          )
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user && request.nextUrl.pathname.startsWith('/admin')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  return supabaseResponse
+}
+
+export const config = {
+  matcher: ['/admin/:path*']
+}
+```
+
+**Key Features:**
+- Runs before page load
+- Redirects unauthenticated users from `/admin/*` routes
+- Properly handles Supabase cookies
+- Minimal performance impact
+
+## Client-Side Auth State
+
+### Navbar Authentication
+
+**Location:** `components/public/Navbar.jsx`
+
+Real-time authentication state monitoring in client component.
+
+```jsx
+'use client';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client'
+
+export default function Navbar() {
+  const supabase = createClient();
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', currentUser.id)
+          .single();
+        setIsAdmin(profile?.is_admin || false);
+      } else {
+        setIsAdmin(false);
+      }
+    };
+
+    checkUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setIsAdmin(false);
+      } else {
+        checkUser();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return (
+    <nav>
+      {user ? (
+        <div>
+          <p>Welcome, {user.email}</p>
+          {isAdmin && <Link href="/admin">Admin Panel</Link>}
+          <button onClick={() => supabase.auth.signOut()}>Logout</button>
+        </div>
+      ) : (
+        <Link href="/login">Login</Link>
+      )}
+    </nav>
+  );
+}
+```
+
+**Key Features:**
+- Real-time auth state updates
+- Admin privilege detection
+- Auth event listeners
+- Cleanup on unmount
+
+## Authentication Flows
+
+### Login Flow
+
+```jsx
+'use client';
+import { useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+
+export default function LoginForm() {
+  const supabase = createClient();
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) {
+      setError(authError.message);
+      return;
+    }
+
+    // Check if admin
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', data.user.id)
+      .single();
+
+    // Redirect based on role
+    if (profile?.is_admin) {
+      router.push('/admin/dashboard');
+    } else {
+      router.push('/');
+    }
+  };
+
+  return (
+    <form onSubmit={handleLogin}>
+      {error && <p className="error">{error}</p>}
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+      />
+      <button type="submit">Login</button>
+    </form>
+  );
+}
+```
+
+---
+
+### Logout Flow
+
+```jsx
+'use client';
+import { createClient } from '@/utils/supabase/client';
+
+export default function LogoutButton() {
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
+
+  return (
+    <button onClick={handleLogout}>
+      Cerrar Sesión
+    </button>
+  );
+}
+```
+
+**Implementation in Sidebar:**
+
+```javascript
+// components/admin/Sidebar.jsx:20-23
+const handleLogout = async () => {
+  await supabase.auth.signOut();
+  window.location.href = "/";
+};
+```
+
+---
+
+### User Session Management
+
+Get current user in server component:
+
+```jsx
+import { createClient } from '@/utils/supabase/server';
+
+export default async function ServerComponent() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  return (
+    <div>
+      {user ? (
+        <p>Logged in as {user.email}</p>
+      ) : (
+        <p>Not logged in</p>
+      )}
+    </div>
+  );
+}
+```
+
+Get current session in client component:
+
+```jsx
+'use client';
+import { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
+
+export default function ClientComponent() {
+  const [user, setUser] = useState(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+  }, []);
+
+  return <div>{user?.email}</div>;
+}
+```
+
+## Database Schema
+
+### Profiles Table
+
+```sql
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  email TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  is_admin BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Row Level Security (RLS)
+
+```sql
+-- Users can read their own profile
+CREATE POLICY "Users can view own profile"
+ON profiles FOR SELECT
+USING (auth.uid() = id);
+
+-- Users can update their own profile
+CREATE POLICY "Users can update own profile"
+ON profiles FOR UPDATE
+USING (auth.uid() = id);
+
+-- Admins can view all profiles
+CREATE POLICY "Admins can view all profiles"
+ON profiles FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid() AND is_admin = true
+  )
+);
+```
+
+## Environment Variables
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+## Best Practices
+
+### 1. Use Correct Client
+
+```jsx
+// ✅ Server Component / API Route
+import { createClient } from '@/utils/supabase/server';
+const supabase = await createClient();
+
+// ✅ Client Component
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
+```
+
+### 2. Always Check User
+
+```javascript
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) {
+  // Handle unauthorized
+}
+```
+
+### 3. Cleanup Listeners
+
+```jsx
+useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(callback);
+  return () => subscription.unsubscribe();
+}, []);
+```
+
+### 4. Verify Admin on Backend
+
+Never trust client-side admin checks for sensitive operations.
+
+```javascript
+// ✅ Good - Server-side check
+const { data: profile } = await supabase
+  .from('profiles')
+  .select('is_admin')
+  .eq('id', user.id)
+  .single();
+
+if (!profile?.is_admin) {
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+}
+```
+
+## Next Steps
+
+- [API Routes](/development/api-routes) - Protected API endpoints
+- [Components](/development/components) - Auth UI components
+- [Payment Processing](/development/payment-processing) - User-based checkout

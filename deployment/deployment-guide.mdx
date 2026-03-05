@@ -1,0 +1,294 @@
+---
+title: "Deployment Guide"
+description: "Deploy Rubik's Vintage to production with Vercel"
+---
+
+## Overview
+
+This guide covers deploying Rubik's Vintage to Vercel, the recommended hosting platform for Next.js applications.
+
+<Note>
+Rubik's Vintage is built with Next.js 16 and requires Node.js 18.17 or higher.
+</Note>
+
+## Prerequisites
+
+Before deploying, ensure you have:
+
+- ✅ A Supabase project with [database tables configured](/deployment/database-setup)
+- ✅ A Stripe account with API keys
+- ✅ A Vercel account (free tier works)
+- ✅ Your source code in a Git repository (GitHub, GitLab, or Bitbucket)
+
+## Deployment Steps
+
+<Steps>
+  <Step title="Prepare Your Repository">
+    Ensure your code is pushed to a Git repository:
+
+    ```bash
+    git add .
+    git commit -m "Prepare for deployment"
+    git push origin main
+    ```
+
+    **Verify** that your `.env.local` file is in `.gitignore` and not committed.
+  </Step>
+
+  <Step title="Connect to Vercel">
+    1. Go to [vercel.com](https://vercel.com) and sign in
+    2. Click **Add New** → **Project**
+    3. Import your Git repository
+    4. Vercel will auto-detect Next.js configuration
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    In the Vercel project setup, add all required environment variables:
+
+    **Supabase Variables:**
+    - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
+    - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+
+    **Stripe Variables:**
+    - `STRIPE_SECRET_KEY` - Your Stripe secret key (use live key for production)
+
+    **App Configuration:**
+    - `NEXT_PUBLIC_APP_URL` - Leave blank for now (you'll update after deployment)
+
+    <Warning>
+    Use your **production/live** Stripe keys (`sk_live_`) for the production deployment, not test keys.
+    </Warning>
+  </Step>
+
+  <Step title="Deploy">
+    Click **Deploy** and wait for Vercel to build and deploy your application.
+
+    Vercel will:
+    - Install dependencies
+    - Build the Next.js app
+    - Deploy to a production URL
+    - Provide you with a deployment URL (e.g., `your-app.vercel.app`)
+  </Step>
+
+  <Step title="Update App URL">
+    After deployment completes:
+
+    1. Copy your Vercel deployment URL
+    2. Go to **Settings** → **Environment Variables** in Vercel
+    3. Update `NEXT_PUBLIC_APP_URL` to your deployment URL
+    4. Redeploy by going to **Deployments** → **⋯** → **Redeploy**
+
+    <Info>
+    This step is crucial for Stripe checkout redirects to work correctly.
+    </Info>
+  </Step>
+
+  <Step title="Configure Custom Domain (Optional)">
+    To use your own domain:
+
+    1. Go to **Settings** → **Domains** in Vercel
+    2. Add your custom domain (e.g., `rubiks-vintage.com`)
+    3. Follow Vercel's instructions to update DNS records
+    4. Update `NEXT_PUBLIC_APP_URL` to your custom domain
+    5. Redeploy
+  </Step>
+
+  <Step title="Configure Stripe Webhook (Optional)">
+    For production, set up Stripe webhooks to receive payment events:
+
+    1. Go to Stripe Dashboard → **Developers** → **Webhooks**
+    2. Click **Add endpoint**
+    3. Endpoint URL: `https://your-domain.com/api/webhook/stripe`
+    4. Select events to listen to (e.g., `checkout.session.completed`)
+    5. Save the webhook signing secret
+    6. Add `STRIPE_WEBHOOK_SECRET` to Vercel environment variables
+
+    <Note>
+    Webhooks are optional but recommended for production to handle payment confirmation more reliably.
+    </Note>
+  </Step>
+</Steps>
+
+## Post-Deployment Checklist
+
+After deploying, verify everything works:
+
+<AccordionGroup>
+  <Accordion title="Authentication">
+    - ✅ Visit `/login` and sign up/sign in
+    - ✅ Check that user profiles are created in Supabase
+    - ✅ Verify authentication persists across page refreshes
+  </Accordion>
+
+  <Accordion title="Products">
+    - ✅ Browse products on the home page
+    - ✅ Filter by categories
+    - ✅ View individual product pages
+    - ✅ Check that product images load correctly
+  </Accordion>
+
+  <Accordion title="Checkout Flow">
+    - ✅ Add products to cart
+    - ✅ Proceed to checkout
+    - ✅ Complete a test purchase (use Stripe test card: `4242 4242 4242 4242`)
+    - ✅ Verify order is created in Supabase `orders` table
+    - ✅ Confirm redirect to success page works
+  </Accordion>
+
+  <Accordion title="Admin Panel">
+    - ✅ Access admin routes (e.g., `/inventory`, `/orders`)
+    - ✅ Add/edit/delete products
+    - ✅ Upload product images to Supabase Storage
+    - ✅ Update store settings
+  </Accordion>
+</AccordionGroup>
+
+## Environment-Specific Configuration
+
+### Development
+
+```bash
+# .env.local
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+STRIPE_SECRET_KEY=sk_test_...
+```
+
+### Production (Vercel)
+
+```bash
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+STRIPE_SECRET_KEY=sk_live_...
+```
+
+## Monitoring and Logs
+
+### Vercel Logs
+
+View real-time logs in Vercel:
+1. Go to your project in Vercel
+2. Click **Deployments**
+3. Select a deployment
+4. View **Build Logs** or **Function Logs**
+
+### Supabase Logs
+
+Monitor database queries:
+1. Go to Supabase Dashboard
+2. Navigate to **Logs**
+3. View Postgres logs, API logs, or Auth logs
+
+### Error Tracking
+
+For production error tracking, consider integrating:
+- [Sentry](https://sentry.io) for error monitoring
+- [Vercel Analytics](https://vercel.com/analytics) for performance insights
+
+## Troubleshooting
+
+<Warning>
+If you encounter issues after deployment, check these common problems:
+</Warning>
+
+### Build Failures
+
+**Problem:** Deployment fails during build
+
+**Solution:**
+- Check build logs in Vercel
+- Ensure all dependencies are in `package.json`
+- Verify Node.js version compatibility (Next.js 16 requires Node 18.17+)
+
+### Environment Variable Issues
+
+**Problem:** "Missing environment variables" error
+
+**Solution:**
+- Verify all variables are set in Vercel
+- Check variable names match exactly (case-sensitive)
+- Redeploy after adding variables
+
+### Stripe Redirects Fail
+
+**Problem:** After checkout, redirect URLs don't work
+
+**Solution:**
+- Ensure `NEXT_PUBLIC_APP_URL` matches your deployment URL
+- Check Stripe dashboard for any redirect URI mismatches
+- Verify success and cancel URLs in `/app/api/checkout/route.js`
+
+### Images Not Loading
+
+**Problem:** Product images show broken links
+
+**Solution:**
+- Verify Supabase Storage bucket is **public**
+- Check bucket name is `product_image`
+- Confirm image URLs in database are correct
+- Add Supabase storage URL to `next.config.ts` remote patterns
+
+### Database Connection Errors
+
+**Problem:** Cannot connect to Supabase
+
+**Solution:**
+- Verify Supabase credentials in environment variables
+- Check Supabase project is not paused (free tier auto-pauses after inactivity)
+- Test connection using Supabase SQL Editor
+
+## Continuous Deployment
+
+Vercel automatically deploys when you push to your Git repository:
+
+- **Push to `main`** → Deploys to production
+- **Push to other branches** → Creates preview deployments
+
+```bash
+# Make changes
+git add .
+git commit -m "Update product page"
+git push origin main
+
+# Vercel will automatically deploy
+```
+
+## Rollback
+
+If a deployment causes issues:
+
+1. Go to **Deployments** in Vercel
+2. Find a previous working deployment
+3. Click **⋯** → **Promote to Production**
+
+## Scaling
+
+As your store grows:
+
+- **Vercel** automatically scales with traffic
+- **Supabase** free tier supports up to 500MB database and 1GB file storage
+- Upgrade to Supabase Pro for production workloads
+- Consider CDN for product images (Vercel includes CDN by default)
+
+## Security Hardening
+
+<Warning>
+Before going live, implement these security measures:
+</Warning>
+
+1. **Enable Supabase RLS** on all tables (see [Database Setup](/deployment/database-setup))
+2. **Use production Stripe keys** and enable webhook signature verification
+3. **Add rate limiting** to API routes
+4. **Enable HTTPS only** (Vercel does this by default)
+5. **Rotate service role keys** periodically
+6. **Set up monitoring** for suspicious activity
+
+## Next Steps
+
+After successful deployment:
+
+1. Set up your first admin user
+2. Upload product inventory
+3. Test the complete purchase flow
+4. Configure email notifications (optional)
+5. Set up analytics tracking (optional)
+6. Launch and market your store! 🚀

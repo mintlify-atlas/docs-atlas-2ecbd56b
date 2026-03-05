@@ -1,0 +1,347 @@
+---
+title: 'API Routes'
+description: 'Backend API endpoints for checkout and payment processing'
+---
+
+## Overview
+
+Rubik's Vintage uses Next.js API Routes for server-side operations, particularly payment processing with Stripe and order management.
+
+All API routes are located in `app/api/`.
+
+## Checkout Endpoints
+
+### POST /api/checkout
+
+**Location:** `app/api/checkout/route.js`
+
+Creates a Stripe checkout session for cart items.
+
+#### Request Body
+
+```json
+{
+  "items": [
+    {
+      "id": "product-uuid",
+      "quantity": 2,
+      "base_price": 599.00
+    }
+  ],
+  "customerData": {
+    "fullName": "Jane Doe",
+    "phone": "+52 555 123 4567",
+    "address": "Calle Example 123, CDMX",
+    "notes": "Entrega en recepción"
+  }
+}
+```
+
+#### Response
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_..."
+}
+```
+
+#### Implementation
+
+```javascript
+import Stripe from "stripe";
+import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from "next/server";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+export async function POST(request) {
+  try {
+    // 1. Authenticate user
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    // 2. Parse request data
+    const { items, customerData } = await request.json();
+    if (!items || items.length === 0) {
+      return NextResponse.json({ error: "Carrito vacío" }, { status: 400 });
+    }
+
+    // 3. Verify prices from database (never trust client)
+    const productIds = items.map((i) => i.id);
+    const { data: products, error: dbError } = await supabase
+      .from("products")
+      .select("id, name, base_price, image_url")
+      .in("id", productIds);
+
+    if (dbError) throw dbError;
+
+    // 4. Create Stripe line items with verified prices
+    const lineItems = items.map((item) => {
+      const product = products.find((p) => p.id === item.id);
+      if (!product) throw new Error(`Producto no encontrado: ${item.id}`);
+      return {
+        price_data: {
+          currency: "mxn",
+          product_data: {
+            name: product.name,
+            ...(product.image_url && { images: [product.image_url] }),
+          },
+          unit_amount: Math.round(product.base_price * 100), // Stripe uses cents
+        },
+        quantity: item.quantity,
+      };
+    });
+
+    // 5. Get shipping fee from store config
+    const { data: storeConfig } = await supabase
+      .from("store_config")
+      .select("shipping_fee")
+      .single();
+
+    const shippingFee = storeConfig?.shipping_fee || 0;
+
+    // 6. Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      mode: "payment",
+      shipping_options: shippingFee > 0 ? [
+        {
+          shipping_rate_data: {
+            type: "fixed_amount",
+            fixed_amount: { amount: shippingFee * 100, currency: "mxn" },
+            display_name: "Envío estándar",
+          },
+        },
+      ] : [],
+      customer_email: user.email,
+      metadata: {
+        user_id: user.id,
+        customer_name: customerData.fullName,
+        customer_phone: customerData.phone,
+        shipping_address: customerData.address,
+        notes: customerData.notes || "",
+        items: JSON.stringify(items.map((i) => ({
+          id: i.id,
+          quantity: i.quantity,
+          unit_price: products.find((p) => p.id === i.id)?.base_price,
+        }))),
+      },
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/checkout`,
+    });
+
+    return NextResponse.json({ url: session.url });
+  } catch (error) {
+    console.error("Stripe error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+```
+
+#### Key Features
+
+1. **Authentication** - Requires authenticated user via Supabase
+2. **Price Verification** - Always fetches prices from database, never trusts client data
+3. **Metadata Storage** - Stores order details in Stripe session metadata
+4. **Dynamic Shipping** - Fetches shipping fee from store configuration
+5. **Error Handling** - Comprehensive error responses
+
+---
+
+### GET /api/checkout/verify
+
+**Location:** `app/api/checkout/verify/route.js`
+
+Verifies payment completion and creates order in database.
+
+#### Query Parameters
+
+- `session_id` (string, required) - Stripe checkout session ID
+
+#### Response
+
+```json
+{
+  "orderId": "order-uuid",
+  "customerName": "Jane Doe",
+  "total": 129800
+}
+```
+
+#### Implementation
+
+```javascript
+import Stripe from "stripe";
+import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from "next/server";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+export async function GET(request) {
+  try {
+    // 1. Get session_id from query params
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("session_id");
+    if (!sessionId) {
+      return NextResponse.json({ error: "session_id requerido" }, { status: 400 });
+    }
+
+    // 2. Retrieve Stripe session
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status !== "paid") {
+      return NextResponse.json({ error: "Pago no completado" }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+
+    // 3. Check for duplicate orders (prevent refresh duplicates)
+    const { data: existing } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("stripe_payment_intent", session.payment_intent)
+      .single();
+
+    if (existing) {
+      return NextResponse.json({
+        orderId: existing.id,
+        customerName: session.metadata.customer_name,
+        total: session.amount_total,
+      });
+    }
+
+    // 4. Create order in database
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert([{
+        user_id: session.metadata.user_id,
+        status: "pagado",
+        total_amount: session.amount_total / 100,
+        stripe_payment_intent: session.payment_intent,
+        customer_email: session.customer_email,
+        customer_name: session.metadata.customer_name,
+        shipping_address: session.metadata.shipping_address,
+        phone: session.metadata.customer_phone,
+        notes: session.metadata.notes,
+      }])
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    // 5. Create order line items
+    const items = JSON.parse(session.metadata.items);
+    const itemsToInsert = items.map((item) => ({
+      order_id: order.id,
+      variant_id: null,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("item_order")
+      .insert(itemsToInsert);
+
+    if (itemsError) throw itemsError;
+
+    return NextResponse.json({
+      orderId: order.id,
+      customerName: session.metadata.customer_name,
+      total: session.amount_total,
+    });
+  } catch (error) {
+    console.error("Verify error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+```
+
+#### Key Features
+
+1. **Payment Verification** - Confirms payment status with Stripe
+2. **Idempotency** - Prevents duplicate orders on page refresh
+3. **Order Creation** - Creates order and line items in Supabase
+4. **Metadata Parsing** - Extracts order details from Stripe session
+5. **Transaction Safety** - Handles database errors gracefully
+
+---
+
+## Authentication Flow
+
+All API routes use Supabase Server Client for authentication:
+
+```javascript
+import { createClient } from "@/utils/supabase/server";
+
+const supabase = await createClient();
+const { data: { user } } = await supabase.auth.getUser();
+
+if (!user) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+```
+
+## Error Handling
+
+### Standard Error Response
+
+```json
+{
+  "error": "Error message"
+}
+```
+
+### HTTP Status Codes
+
+- `200` - Success
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized (no auth)
+- `500` - Internal Server Error
+
+## Environment Variables
+
+Required environment variables:
+
+```bash
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+## Testing
+
+### Test Checkout Creation
+
+```bash
+curl -X POST http://localhost:3000/api/checkout \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [{"id": "uuid", "quantity": 1}],
+    "customerData": {
+      "fullName": "Test User",
+      "phone": "+52 555 1234",
+      "address": "Test Address"
+    }
+  }'
+```
+
+### Test Payment Verification
+
+```bash
+curl http://localhost:3000/api/checkout/verify?session_id=cs_test_...
+```
+
+## Next Steps
+
+- [Payment Processing](/development/payment-processing) - Complete payment flow
+- [Authentication](/development/authentication) - Auth implementation
+- [State Management](/development/state-management) - Cart integration

@@ -1,0 +1,169 @@
+---
+title: "Managing Products"
+description: "Add, edit, and manage your vintage jewelry inventory"
+---
+
+The inventory management page (`/inventory`) allows you to manage all products in your Rubik's Vintage store. You can add new pieces, edit existing products, upload images, and organize your catalog.
+
+## Viewing Your Inventory
+
+The inventory page displays all products in a responsive grid layout:
+
+- **Product image** with hover effects
+- **Product name** in uppercase tracking
+- **Base price** in MXN (Mexican Pesos)
+- **Category** name below price
+
+### Search Functionality
+
+Use the search bar at the top to filter products by name:
+
+```
+Buscar pieza... (Search for a piece...)
+```
+
+The search filters products in real-time as you type.
+
+## Adding a New Product
+
+Click the **"Nueva Pieza"** (New Piece) button to open the product creation form.
+
+<Steps>
+  <Step title="Upload Product Image">
+    Click the camera icon area to upload a product photograph. Supported formats: JPG, PNG, GIF.
+    
+    Images are stored in Supabase Storage in the `product_image` bucket and automatically optimized.
+  </Step>
+  
+  <Step title="Enter Product Details">
+    Fill in the required fields:
+    
+    - **Nombre** (Name): Product title (e.g., "Collar Oro Laminado")
+    - **Categoría** (Category): Select from existing categories
+    - **Precio Base** (Base Price): Price in MXN
+    - **Descripción** (Description): Unique details about the piece
+  </Step>
+  
+  <Step title="Preview Your Product">
+    The right sidebar shows a live preview of how your product will appear in the store ("Vista previa del Bazar").
+    
+    The preview includes:
+    - Product image
+    - Product name
+    - Formatted price
+    - Shipping and authenticity icons
+  </Step>
+  
+  <Step title="Publish to Store">
+    Click **"Publicar en la Tienda"** (Publish to Store) to add the product to your catalog.
+    
+    A success notification will appear when the product is saved.
+  </Step>
+</Steps>
+
+## Product Fields Explained
+
+### Name (Nombre)
+The display name for your product. Use descriptive titles that help customers understand what they're buying.
+
+**Examples:**
+- "Collar Oro Laminado Art Deco"
+- "Aretes Perla Vintage 1950s"
+- "Anillo Plata con Circonias"
+
+### Category (Categoría)
+Products must be assigned to a category. Categories are pre-defined in your database and help organize your catalog.
+
+Common categories:
+- Collares (Necklaces)
+- Aretes (Earrings)
+- Anillos (Rings)
+- Pulseras (Bracelets)
+
+### Base Price (Precio Base)
+Price in Mexican Pesos (MXN). Enter numeric value only (e.g., `1250.00`).
+
+<Note>
+The price is displayed with MXN currency formatting throughout the store. Shipping costs are added separately during checkout.
+</Note>
+
+### Description (Descripción)
+Optional field for unique details about the piece:
+- Era or time period
+- Materials and craftsmanship
+- Condition notes
+- Historical significance
+
+## Editing Existing Products
+
+Hover over any product card in the grid to reveal action buttons:
+
+### Edit Button (Pencil Icon)
+Click the pencil icon to open the edit modal with pre-filled product information.
+
+The edit modal allows you to:
+- Replace the product image
+- Update name, category, and price
+- Modify description
+- Save changes with **"Guardar Cambios"** (Save Changes)
+
+### Delete Button (Trash Icon)
+Click the trash icon to remove a product from your catalog.
+
+<Warning>
+Deletion requires confirmation and is permanent. The product will be removed from your database.
+</Warning>
+
+## Image Management
+
+### Uploading Images
+
+1. Click the upload area (camera icon)
+2. Select an image file from your computer
+3. Preview appears immediately
+4. Image is uploaded to Supabase Storage on form submission
+
+### Image Requirements
+
+- **Aspect ratio:** 3:4 recommended for product cards
+- **Format:** JPEG, PNG, or GIF
+- **Size:** Images are stored with random filenames to prevent conflicts
+
+### Changing Images
+
+In the edit modal, click the existing image to upload a new one. The old image remains in storage but the product will display the new URL.
+
+## Product Categories
+
+Categories are managed in the `categories` database table and displayed in dropdown menus.
+
+### Viewing by Category
+
+Each product card shows its category name below the price in small, uppercase text.
+
+<Tip>
+Contact your database administrator to add or modify product categories. Categories cannot be managed from the admin UI.
+</Tip>
+
+## Inventory Statistics
+
+The page header shows:
+
+```
+X piezas en colección
+(X pieces in collection)
+```
+
+This count updates automatically as you add or remove products.
+
+## Success Notifications
+
+After adding or editing a product, a success notification appears at the top of the page confirming the action was completed.
+
+## Low Stock Alerts
+
+While not visible on the inventory page, low stock warnings appear on the dashboard. The inventory page focuses on product content management rather than stock levels.
+
+<Note>
+All product data is stored in the `products` table in your Supabase database. Images are stored separately in the `product_image` storage bucket.
+</Note>

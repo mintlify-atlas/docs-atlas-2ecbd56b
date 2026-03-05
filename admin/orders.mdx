@@ -1,0 +1,211 @@
+---
+title: "Order Management"
+description: "View, process, and fulfill customer orders"
+---
+
+The orders page (`/orders`) is your central hub for managing customer purchases, tracking order status, and coordinating fulfillment.
+
+## Orders Overview
+
+The orders page provides:
+
+- **Quick statistics** showing order counts by status
+- **Search functionality** to find specific orders or customers
+- **Detailed order table** with customer and payment information
+- **Status filtering** to view orders by fulfillment stage
+
+## Order Statistics
+
+Three key metrics are displayed at the top:
+
+### Pending Orders (Pendientes)
+- **Icon:** Clock icon in amber
+- **Shows:** Orders awaiting processing
+- **Example:** `12` pending orders
+
+### In Transit (En Camino)
+- **Icon:** Truck icon in blue
+- **Shows:** Orders currently being shipped
+- **Example:** `05` orders in transit
+
+### Delivered (Entregados)
+- **Icon:** Check circle in emerald green
+- **Shows:** Successfully completed orders
+- **Example:** `48` delivered orders
+
+## Search Orders
+
+Use the search bar at the top to find orders:
+
+```
+Buscar pedido o cliente...
+(Search order or customer...)
+```
+
+Search by:
+- Order ID (e.g., #ZA-2021)
+- Customer name
+- Customer email
+
+## Orders Table
+
+The main table displays order information in a clean, responsive layout:
+
+### Table Columns
+
+#### Order ID (Pedido)
+Unique order identifier in format `#ZA-XXXX`
+
+**Example:** `#ZA-2021`, `#ZA-2022`
+
+#### Customer (Cliente)
+- Customer full name in bold
+- Customer email below name
+
+**Example:**
+```
+Ana García
+ana.g@email.com
+```
+
+#### Date (Fecha)
+Order placement date
+
+**Format:** `DD MMM, YYYY`
+
+**Example:** `24 Feb, 2026`
+
+<Note>
+The date column is hidden on mobile devices to optimize screen space.
+</Note>
+
+#### Total
+Order amount in Mexican Pesos
+
+**Format:** `$X,XXX MXN`
+
+**Example:** `$1,250 MXN`
+
+#### Status (Estado)
+Current order status with color-coded badge
+
+**Status Options:**
+
+<AccordionGroup>
+  <Accordion title="Pendiente (Pending)" icon="clock">
+    **Color:** Yellow/Amber badge
+    
+    **Meaning:** Order received but not yet processed
+    
+    **Action Required:** Review order details and prepare for shipment
+  </Accordion>
+  
+  <Accordion title="Procesando (Processing)" icon="box">
+    **Color:** Purple badge
+    
+    **Meaning:** Order is being prepared for shipment
+    
+    **Action Required:** Package items and prepare shipping label
+  </Accordion>
+  
+  <Accordion title="Enviado (Shipped)" icon="truck">
+    **Color:** Blue badge
+    
+    **Meaning:** Order has been shipped to customer
+    
+    **Action Required:** Monitor delivery and await confirmation
+  </Accordion>
+</AccordionGroup>
+
+#### Action (Acción)
+Click the chevron icon (→) to view full order details
+
+## Order Workflow
+
+Typical order fulfillment process:
+
+<Steps>
+  <Step title="Order Received - Pendiente">
+    New orders appear with "Pendiente" (Pending) status. Review order details and verify payment.
+  </Step>
+  
+  <Step title="Prepare for Shipment - Procesando">
+    Update status to "Procesando" (Processing) when you begin preparing the package.
+    
+    - Gather ordered items
+    - Package securely
+    - Print shipping label
+  </Step>
+  
+  <Step title="Ship Order - Enviado">
+    Update status to "Enviado" (Shipped) once package is handed to carrier.
+    
+    - Record tracking number
+    - Notify customer
+  </Step>
+  
+  <Step title="Confirm Delivery - Entregado">
+    Mark as "Entregado" (Delivered) once customer receives package.
+  </Step>
+</Steps>
+
+## Filtering Orders
+
+Click the **"Filtrar"** (Filter) button in the table header to filter orders by:
+
+- Order status
+- Date range
+- Customer segment
+- Order value
+
+<Tip>
+Use filters to focus on orders that need immediate attention, such as "Pendiente" orders awaiting processing.
+</Tip>
+
+## Order Details View
+
+Click the chevron button on any order row to view complete order information:
+
+- Full customer details and shipping address
+- Ordered products with images and quantities
+- Payment information
+- Order timeline and status history
+- Fulfillment notes
+
+<Note>
+The order details view is currently displayed inline. A future update may add a dedicated order detail page.
+</Note>
+
+## Managing Order Status
+
+To update an order's status:
+
+1. Click the order row to expand details
+2. Select new status from dropdown
+3. Add any fulfillment notes
+4. Save changes
+
+Status changes are tracked in the order history.
+
+## View All Orders
+
+Click **"Ver todo el historial"** (View entire history) at the bottom of the table to load all orders, including older completed orders.
+
+## Order Database
+
+Orders are stored in the `orders` table in your Supabase database with the following key fields:
+
+- `id` - Unique order identifier
+- `customer_id` - Link to customer profile
+- `status` - Current order status
+- `total_amount` - Order total in MXN
+- `created_at` - Order date/time
+- `shipping_address` - Delivery address
+
+<Warning>
+Only update order status when the corresponding action has been completed. Incorrect status updates can confuse customers and affect your order metrics.
+</Warning>
+
+## Integration with Customers
+
+Order data is linked to customer profiles. Click a customer name to view their complete order history and profile information.

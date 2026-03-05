@@ -1,0 +1,222 @@
+---
+title: "Customer Management"
+description: "View and manage your customer database"
+---
+
+The customers page (`/customers`) provides a comprehensive view of your Rubik's Vintage customer base, including purchase history, contact information, and customer segmentation.
+
+## Customer Overview
+
+The page displays three key audience metrics:
+
+### Total Customers (Total Clientes)
+- **Icon:** Users icon
+- **Shows:** Complete customer count
+- **Example:** `128` customers
+
+### New Customers This Month (Nuevos)
+- **Icon:** User plus icon
+- **Shows:** New customer registrations in current month
+- **Example:** `+14` new this month
+
+### VIP Customers (Clientes VIP)
+- **Icon:** Star icon
+- **Shows:** High-value or repeat customers
+- **Example:** `08` VIP customers
+
+## Search Customers
+
+Use the search bar to find customers by name or email:
+
+```
+Buscar por nombre o correo...
+(Search by name or email...)
+```
+
+The search filters the customer list in real-time.
+
+## Customer Directory Table
+
+The main table displays customer information with the following columns:
+
+### Customer Profile (Cliente)
+
+**Avatar Circle:** Displays customer initials in a circular badge
+
+**Example:** "MC" for Mariana Costa
+
+**Customer Name:** Full name with optional VIP indicator
+
+<Note>
+VIP customers are marked with a gold star icon (⭐) next to their name.
+</Note>
+
+**Email Address:** Customer contact email displayed below name
+
+**Example:**
+```
+Mariana Costa ⭐
+cliente@ejemplo.com
+```
+
+### Location (Ubicación)
+
+Customer's city and country
+
+**Example:** `CDMX, México`
+
+<Note>
+The location column is hidden on mobile and tablet devices to save space.
+</Note>
+
+### Order Count (Pedidos)
+
+Number of orders placed by this customer
+
+**Display:** Shown in a badge with border
+
+**Example:** `03`, `05`
+
+### Total Spent (Total Gastado)
+
+Lifetime value - total amount spent by customer
+
+**Format:** `$X,XXX MXN`
+
+**Example:** `$2,500 MXN`, `$7,500 MXN`
+
+### Profile Actions (Perfil)
+
+Click the three-dot menu icon to access customer actions:
+
+- View full profile
+- View order history
+- Send email
+- Add notes
+- Mark as VIP
+
+## VIP Customer Identification
+
+VIP customers are identified by:
+
+1. **Gold star icon** next to their name
+2. **Higher total spent** amounts
+3. **Multiple orders** in their history
+
+### VIP Benefits
+
+While not enforced in the UI, VIP designation allows you to:
+
+- Provide special discounts
+- Offer early access to new products
+- Send exclusive communications
+- Prioritize their orders
+
+<Tip>
+Use the filter option to segment VIP customers for targeted marketing campaigns.
+</Tip>
+
+## Customer Segmentation
+
+Click the **"Segmentar"** (Segment) button with filter icon to filter customers by:
+
+- Purchase frequency
+- Total spending
+- Location
+- VIP status
+- Last order date
+
+## Viewing Customer Details
+
+Click the three-dot menu on any customer row to view:
+
+### Customer Profile
+- Full name and contact information
+- Shipping addresses
+- Account creation date
+- Customer notes
+
+### Order History
+- Complete list of orders
+- Order dates and amounts
+- Product details
+- Order status
+
+### Customer Metrics
+- Total orders placed
+- Lifetime value (total spent)
+- Average order value
+- Last purchase date
+
+## Customer Database
+
+Customer information is stored in the `profiles` table in Supabase:
+
+**Key Fields:**
+- `id` - Unique customer identifier
+- `first_name` - Customer first name
+- `last_name` - Customer last name
+- `email` - Contact email
+- `created_at` - Registration date
+
+**Related Data:**
+- Orders linked via `customer_id`
+- Addresses stored separately
+- Purchase history calculated from orders
+
+## Customer Communication
+
+While email functionality is not built into the admin panel, you can:
+
+1. Copy customer email from the table
+2. Use your email client to contact customers
+3. Reference order numbers from their history
+
+<Warning>
+Always respect customer privacy and follow data protection regulations (GDPR, local laws) when handling customer information.
+</Warning>
+
+## Customer Analytics
+
+### Understanding Customer Value
+
+**High-Value Customers:**
+- Multiple orders (5+ orders)
+- High total spent ($5,000+ MXN)
+- Recent activity
+
+**At-Risk Customers:**
+- No recent orders (6+ months)
+- Single purchase only
+- Low engagement
+
+**New Customers:**
+- Registered in last 30 days
+- First purchase or no purchase yet
+- Opportunity for welcome campaigns
+
+## Customer Retention
+
+Use the customer directory to:
+
+<Steps>
+  <Step title="Identify Top Customers">
+    Sort by total spent to find your most valuable customers. Consider marking them as VIP.
+  </Step>
+  
+  <Step title="Monitor Purchase Patterns">
+    Track order frequency to identify engaged customers and those who may need re-engagement.
+  </Step>
+  
+  <Step title="Personalize Communication">
+    Use customer history to send personalized product recommendations and exclusive offers.
+  </Step>
+  
+  <Step title="Build Loyalty">
+    Recognize VIP customers with special perks and early access to new vintage pieces.
+  </Step>
+</Steps>
+
+<Note>
+The customer directory shows sample data in the UI. Real customer data will populate from your Supabase database once orders are placed.
+</Note>

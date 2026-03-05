@@ -1,0 +1,438 @@
+---
+title: 'Stripe Integration'
+description: 'Learn how Rubik''s Vintage processes payments using Stripe Checkout'
+---
+
+## Overview
+
+Rubik's Vintage uses Stripe Checkout to handle all payment processing for vintage jewelry purchases. The integration ensures secure payment handling, validates prices server-side, and stores order information in Supabase.
+
+## Configuration
+
+Stripe is initialized in API routes with the secret key:
+
+```javascript
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+```
+
+## Payment Flow
+
+The payment process follows these steps:
+
+<Steps>
+  <Step title="User initiates checkout">
+    Customer adds items to cart and proceeds to checkout with shipping information
+  </Step>
+  
+  <Step title="Create Stripe session">
+    API route validates prices from database and creates a Stripe Checkout session
+  </Step>
+  
+  <Step title="Redirect to Stripe">
+    User is redirected to Stripe's hosted checkout page
+  </Step>
+  
+  <Step title="Payment completion">
+    After successful payment, Stripe redirects back to success page
+  </Step>
+  
+  <Step title="Order verification">
+    Server verifies payment with Stripe and saves order to database
+  </Step>
+</Steps>
+
+## Creating a Checkout Session
+
+The `/api/checkout` endpoint creates a Stripe Checkout session:
+
+<CodeGroup>
+```javascript app/api/checkout/route.js
+import Stripe from "stripe"
+import { createClient } from "@/utils/supabase/server"
+import { NextResponse } from "next/server"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+export async function POST(request) {
+  try {
+    const supabase = await createClient()
+    
+    // Authenticate user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: "No autenticado" }, 
+        { status: 401 }
+      )
+    }
+
+    const { items, customerData } = await request.json()
+
+    if (!items || items.length === 0) {
+      return NextResponse.json(
+        { error: "Carrito vacío" }, 
+        { status: 400 }
+      )
+    }
+
+    // Verify prices from database (never trust client)
+    const productIds = items.map((i) => i.id)
+    const { data: products, error: dbError } = await supabase
+      .from("products")
+      .select("id, name, base_price, image_url")
+      .in("id", productIds)
+
+    if (dbError) throw dbError
+
+    // Create line_items with verified prices
+    const lineItems = items.map((item) => {
+      const product = products.find((p) => p.id === item.id)
+      if (!product) throw new Error(`Producto no encontrado: ${item.id}`)
+      
+      return {
+        price_data: {
+          currency: "mxn",
+          product_data: {
+            name: product.name,
+            ...(product.image_url && { images: [product.image_url] }),
+          },
+          unit_amount: Math.round(product.base_price * 100), // Stripe uses cents
+        },
+        quantity: item.quantity,
+      }
+    })
+
+    // Get shipping fee from store config
+    const { data: storeConfig } = await supabase
+      .from("store_config")
+      .select("shipping_fee")
+      .single()
+
+    const shippingFee = storeConfig?.shipping_fee || 0
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      mode: "payment",
+      shipping_options: shippingFee > 0 ? [
+        {
+          shipping_rate_data: {
+            type: "fixed_amount",
+            fixed_amount: { 
+              amount: shippingFee * 100, 
+              currency: "mxn" 
+            },
+            display_name: "Envío estándar",
+          },
+        },
+      ] : [],
+      customer_email: user.email,
+      metadata: {
+        user_id: user.id,
+        customer_name: customerData.fullName,
+        customer_phone: customerData.phone,
+        shipping_address: customerData.address,
+        notes: customerData.notes || "",
+        items: JSON.stringify(items.map((i) => ({
+          id: i.id,
+          quantity: i.quantity,
+          unit_price: products.find((p) => p.id === i.id)?.base_price,
+        }))),
+      },
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/checkout`,
+    })
+
+    return NextResponse.json({ url: session.url })
+  } catch (error) {
+    console.error("Stripe error:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+```
+
+```javascript Client Usage
+const response = await fetch('/api/checkout', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    items: [
+      { id: 'product-id', quantity: 1 }
+    ],
+    customerData: {
+      fullName: 'Ana Pérez',
+      phone: '5551234567',
+      address: 'Calle Principal 123, CDMX',
+      notes: 'Entregar por la tarde'
+    }
+  })
+})
+
+const { url } = await response.json()
+window.location.href = url // Redirect to Stripe
+```
+</CodeGroup>
+
+<Note>
+**Security Best Practice**: Always fetch and verify product prices from your database server-side. Never trust prices sent from the client as they can be manipulated.
+</Note>
+
+## Verifying Payment
+
+After successful payment, verify the session and save the order:
+
+<CodeGroup>
+```javascript app/api/checkout/verify/route.js
+import Stripe from "stripe"
+import { createClient } from "@/utils/supabase/server"
+import { NextResponse } from "next/server"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const sessionId = searchParams.get("session_id")
+    
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "session_id requerido" }, 
+        { status: 400 }
+      )
+    }
+
+    // Verify payment with Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    
+    if (session.payment_status !== "paid") {
+      return NextResponse.json(
+        { error: "Pago no completado" }, 
+        { status: 400 }
+      )
+    }
+
+    const supabase = await createClient()
+
+    // Prevent duplicate orders if user reloads page
+    const { data: existing } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("stripe_payment_intent", session.payment_intent)
+      .single()
+
+    if (existing) {
+      return NextResponse.json({
+        orderId: existing.id,
+        customerName: session.metadata.customer_name,
+        total: session.amount_total,
+      })
+    }
+
+    // Save order to Supabase
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert([{
+        user_id: session.metadata.user_id,
+        status: "pagado",
+        total_amount: session.amount_total / 100,
+        stripe_payment_intent: session.payment_intent,
+        customer_email: session.customer_email,
+        customer_name: session.metadata.customer_name,
+        shipping_address: session.metadata.shipping_address,
+        phone: session.metadata.customer_phone,
+        notes: session.metadata.notes,
+      }])
+      .select()
+      .single()
+
+    if (orderError) throw orderError
+
+    // Save order items
+    const items = JSON.parse(session.metadata.items)
+    const itemsToInsert = items.map((item) => ({
+      order_id: order.id,
+      variant_id: null,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+    }))
+
+    const { error: itemsError } = await supabase
+      .from("item_order")
+      .insert(itemsToInsert)
+
+    if (itemsError) throw itemsError
+
+    return NextResponse.json({
+      orderId: order.id,
+      customerName: session.metadata.customer_name,
+      total: session.amount_total,
+    })
+  } catch (error) {
+    console.error("Verify error:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+```
+
+```javascript Success Page Usage
+// On checkout success page
+const searchParams = new URLSearchParams(window.location.search)
+const sessionId = searchParams.get('session_id')
+
+const response = await fetch(`/api/checkout/verify?session_id=${sessionId}`)
+const data = await response.json()
+
+console.log('Order ID:', data.orderId)
+console.log('Total:', data.total / 100, 'MXN')
+```
+</CodeGroup>
+
+## Key Features
+
+### Price Validation
+
+All prices are verified server-side from the database:
+
+```javascript
+// Fetch real prices from database
+const { data: products } = await supabase
+  .from("products")
+  .select("id, name, base_price, image_url")
+  .in("id", productIds)
+
+// Use database prices, not client prices
+unit_amount: Math.round(product.base_price * 100)
+```
+
+### Metadata Storage
+
+Customer information is stored in session metadata for later retrieval:
+
+```javascript
+metadata: {
+  user_id: user.id,
+  customer_name: customerData.fullName,
+  customer_phone: customerData.phone,
+  shipping_address: customerData.address,
+  notes: customerData.notes || "",
+  items: JSON.stringify(items)
+}
+```
+
+### Duplicate Prevention
+
+The system checks for existing orders by payment intent ID:
+
+```javascript
+const { data: existing } = await supabase
+  .from("orders")
+  .select("id")
+  .eq("stripe_payment_intent", session.payment_intent)
+  .single()
+
+if (existing) {
+  // Return existing order instead of creating duplicate
+  return NextResponse.json({ orderId: existing.id, ... })
+}
+```
+
+### Dynamic Shipping
+
+Shipping costs are fetched from database configuration:
+
+```javascript
+const { data: storeConfig } = await supabase
+  .from("store_config")
+  .select("shipping_fee")
+  .single()
+
+const shippingFee = storeConfig?.shipping_fee || 0
+
+shipping_options: shippingFee > 0 ? [
+  {
+    shipping_rate_data: {
+      type: "fixed_amount",
+      fixed_amount: { amount: shippingFee * 100, currency: "mxn" },
+      display_name: "Envío estándar"
+    }
+  }
+] : []
+```
+
+## Currency Handling
+
+<Warning>
+Stripe amounts are in cents (or smallest currency unit). Always multiply prices by 100 for MXN:
+
+```javascript
+// Product price in database: 1500 MXN
+unit_amount: Math.round(product.base_price * 100) // 150000 cents
+
+// When reading from Stripe:
+total_amount: session.amount_total / 100 // Convert back to MXN
+```
+</Warning>
+
+## Environment Variables
+
+Add these to your `.env.local` file:
+
+```bash .env.local
+STRIPE_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+<Note>
+- Use test keys (`sk_test_...`) for development
+- Use live keys (`sk_live_...`) for production
+- Never expose secret keys to the client
+</Note>
+
+## Testing
+
+Use Stripe's test cards for development:
+
+| Card Number | Scenario |
+|-------------|----------|
+| 4242 4242 4242 4242 | Successful payment |
+| 4000 0000 0000 9995 | Declined payment |
+| 4000 0025 0000 3155 | Requires authentication |
+
+<Note>
+Use any future expiry date, any 3-digit CVC, and any postal code with test cards.
+</Note>
+
+## Error Handling
+
+```javascript
+try {
+  const session = await stripe.checkout.sessions.create({ ... })
+  return NextResponse.json({ url: session.url })
+} catch (error) {
+  console.error("Stripe error:", error)
+  
+  // Return user-friendly error
+  return NextResponse.json(
+    { error: error.message }, 
+    { status: 500 }
+  )
+}
+```
+
+## Best Practices
+
+1. **Always validate server-side**: Fetch prices from your database, never trust client data
+2. **Use metadata wisely**: Store order details in session metadata for later retrieval
+3. **Prevent duplicates**: Check for existing orders using payment_intent before inserting
+4. **Handle errors gracefully**: Provide clear error messages to users
+5. **Test thoroughly**: Use test cards and verify all edge cases
+6. **Secure keys**: Keep secret keys in environment variables, never commit them
+
+## Related Resources
+
+- [Stripe Checkout Documentation](https://stripe.com/docs/payments/checkout)
+- [Stripe API Reference](https://stripe.com/docs/api)
+- [Supabase Integration](/integrations/supabase)

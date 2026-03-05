@@ -1,0 +1,252 @@
+---
+title: "Database Setup"
+description: "Set up your Supabase database schema for Rubik's Vintage"
+---
+
+## Overview
+
+Rubik's Vintage uses Supabase as its database and authentication provider. This guide walks you through setting up all required tables and storage buckets.
+
+<Note>
+You'll need a Supabase account and project. If you haven't created one yet, visit [supabase.com](https://supabase.com) and create a new project.
+</Note>
+
+## Database Schema
+
+The application requires the following tables:
+
+### Tables Overview
+
+| Table | Purpose |
+|-------|--------|
+| `profiles` | User profile information (linked to Supabase Auth) |
+| `products` | Product catalog (jewelry items) |
+| `categories` | Product categories |
+| `orders` | Customer orders |
+| `item_order` | Order line items (products in each order) |
+| `store_config` | Global store configuration |
+
+## Step-by-Step Setup
+
+<Steps>
+  <Step title="Create the Categories Table">
+    ```sql
+    CREATE TABLE categories (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Insert default categories
+    INSERT INTO categories (name) VALUES
+      ('Collares'),
+      ('Anillos'),
+      ('Aretes'),
+      ('Pulseras');
+    ```
+  </Step>
+
+  <Step title="Create the Products Table">
+    ```sql
+    CREATE TABLE products (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      base_price DECIMAL(10, 2) NOT NULL,
+      image_url TEXT,
+      category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Create index for faster queries
+    CREATE INDEX idx_products_category ON products(category_id);
+    CREATE INDEX idx_products_created_at ON products(created_at DESC);
+    ```
+  </Step>
+
+  <Step title="Create the Profiles Table">
+    ```sql
+    CREATE TABLE profiles (
+      id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+      email TEXT,
+      first_name TEXT,
+      last_name TEXT,
+      role TEXT DEFAULT 'customer',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Auto-create profile when user signs up
+    CREATE OR REPLACE FUNCTION public.handle_new_user()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      INSERT INTO public.profiles (id, email)
+      VALUES (NEW.id, NEW.email);
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+    CREATE TRIGGER on_auth_user_created
+      AFTER INSERT ON auth.users
+      FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+    ```
+  </Step>
+
+  <Step title="Create the Orders Table">
+    ```sql
+    CREATE TABLE orders (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+      status TEXT DEFAULT 'pagado',
+      total_amount DECIMAL(10, 2) NOT NULL,
+      stripe_payment_intent TEXT UNIQUE,
+      customer_email TEXT,
+      customer_name TEXT,
+      phone TEXT,
+      shipping_address TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_orders_user ON orders(user_id);
+    CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
+    CREATE INDEX idx_orders_stripe_payment ON orders(stripe_payment_intent);
+    ```
+  </Step>
+
+  <Step title="Create the Item Order Table">
+    ```sql
+    CREATE TABLE item_order (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+      variant_id UUID,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      unit_price DECIMAL(10, 2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_item_order_order ON item_order(order_id);
+    ```
+  </Step>
+
+  <Step title="Create the Store Config Table">
+    ```sql
+    CREATE TABLE store_config (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      store_name TEXT DEFAULT 'Rubik''s Vintage',
+      contact_email TEXT,
+      shipping_fee DECIMAL(10, 2) DEFAULT 0,
+      announcement_bar TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Insert default config
+    INSERT INTO store_config (store_name, shipping_fee, announcement_bar)
+    VALUES ('Rubik''s Vintage', 100.00, 'Envío gratis en compras mayores a $999');
+    ```
+  </Step>
+
+  <Step title="Set Up Storage Bucket">
+    Create a storage bucket for product images:
+
+    1. Go to **Storage** in your Supabase dashboard
+    2. Click **New bucket**
+    3. Name it `product_image`
+    4. Set it to **Public** (so product images can be viewed by anyone)
+    5. Click **Create bucket**
+
+    Or via SQL:
+    ```sql
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('product_image', 'product_image', true);
+    ```
+  </Step>
+
+  <Step title="Configure Row Level Security (RLS)">
+    Enable RLS and create policies for secure access:
+
+    ```sql
+    -- Enable RLS on all tables
+    ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE item_order ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE store_config ENABLE ROW LEVEL SECURITY;
+
+    -- Products: Public read, admin write
+    CREATE POLICY "Products are viewable by everyone"
+      ON products FOR SELECT
+      USING (true);
+
+    -- Categories: Public read
+    CREATE POLICY "Categories are viewable by everyone"
+      ON categories FOR SELECT
+      USING (true);
+
+    -- Store config: Public read
+    CREATE POLICY "Store config is viewable by everyone"
+      ON store_config FOR SELECT
+      USING (true);
+
+    -- Orders: Users can view their own orders
+    CREATE POLICY "Users can view their own orders"
+      ON orders FOR SELECT
+      USING (auth.uid() = user_id);
+
+    -- Profiles: Users can view and update their own profile
+    CREATE POLICY "Users can view their own profile"
+      ON profiles FOR SELECT
+      USING (auth.uid() = id);
+
+    CREATE POLICY "Users can update their own profile"
+      ON profiles FOR UPDATE
+      USING (auth.uid() = id);
+    ```
+
+    <Warning>
+    For admin operations (inventory management), use the service role key which bypasses RLS.
+    </Warning>
+  </Step>
+</Steps>
+
+## Verify Your Setup
+
+After running all SQL commands, verify your setup:
+
+1. **Check Tables:** Go to **Table Editor** in Supabase and confirm all 6 tables exist
+2. **Check Storage:** Go to **Storage** and confirm `product_image` bucket exists
+3. **Check Policies:** Go to **Authentication** → **Policies** and verify RLS policies are active
+
+## Sample Data (Optional)
+
+To test your application, add some sample products:
+
+```sql
+INSERT INTO products (name, description, base_price, category_id)
+VALUES
+  ('Collar Vintage Oro', 'Hermoso collar de oro laminado estilo vintage', 1299.00,
+   (SELECT id FROM categories WHERE name = 'Collares' LIMIT 1)),
+  ('Anillo Solitario', 'Elegante anillo con piedra central', 899.00,
+   (SELECT id FROM categories WHERE name = 'Anillos' LIMIT 1)),
+  ('Aretes Perla', 'Delicados aretes con perlas naturales', 599.00,
+   (SELECT id FROM categories WHERE name = 'Aretes' LIMIT 1));
+```
+
+## Database Backups
+
+<Note>
+Supabase automatically backs up your database. You can also:
+- Create manual backups from the Supabase dashboard
+- Export data as CSV from the Table Editor
+- Use `pg_dump` for PostgreSQL backups
+</Note>
+
+## Next Steps
+
+Once your database is set up:
+
+1. Configure your [environment variables](/deployment/environment-variables)
+2. Follow the [deployment guide](/deployment/deployment-guide) to launch your application
+3. Create your admin user and start adding products

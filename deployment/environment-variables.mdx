@@ -1,0 +1,129 @@
+---
+title: "Environment Variables"
+description: "Configure all required environment variables for Rubik's Vintage deployment"
+---
+
+## Overview
+
+Rubik's Vintage requires several environment variables to connect to Supabase (database and authentication), Stripe (payment processing), and configure the Next.js application.
+
+<Warning>
+Never commit `.env.local` or `.env` files to version control. Keep your secrets secure.
+</Warning>
+
+## Required Environment Variables
+
+### Supabase Configuration
+
+These variables connect your application to Supabase for database operations and authentication.
+
+<ParamField path="NEXT_PUBLIC_SUPABASE_URL" type="string" required>
+  Your Supabase project URL.
+  
+  **Where to find it:** Supabase Dashboard → Project Settings → API → Project URL
+  
+  **Example:** `https://eartxzbtywjsuezcbtlj.supabase.co`
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_SUPABASE_ANON_KEY" type="string" required>
+  Your Supabase anonymous/public API key. Safe to expose to the client.
+  
+  **Where to find it:** Supabase Dashboard → Project Settings → API → Project API keys → `anon` `public`
+  
+  **Used in:** Client-side Supabase operations, authentication
+</ParamField>
+
+<ParamField path="SUPABASE_SERVICE_ROLE_KEY" type="string" required>
+  Your Supabase service role key with admin privileges. **Never expose this to the client.**
+  
+  **Where to find it:** Supabase Dashboard → Project Settings → API → Project API keys → `service_role`
+  
+  **Used in:** Server-side admin operations (bypassing RLS policies)
+  
+  **Security:** This key should only be used in API routes and server actions, never in client components.
+</ParamField>
+
+### Stripe Configuration
+
+These variables enable payment processing through Stripe.
+
+<ParamField path="STRIPE_SECRET_KEY" type="string" required>
+  Your Stripe secret API key for server-side operations.
+  
+  **Where to find it:** Stripe Dashboard → Developers → API keys → Secret key
+  
+  **Format:** Starts with `sk_test_` (test mode) or `sk_live_` (production)
+  
+  **Used in:** Payment session creation, payment verification
+</ParamField>
+
+<Note>
+For production, make sure to use your live Stripe key (`sk_live_`). During development, use test keys (`sk_test_`).
+</Note>
+
+### Application Configuration
+
+<ParamField path="NEXT_PUBLIC_APP_URL" type="string" required>
+  The base URL of your deployed application.
+  
+  **Examples:**
+  - Development: `http://localhost:3000`
+  - Production: `https://your-domain.com`
+  
+  **Used in:** Stripe redirect URLs (success/cancel URLs after checkout)
+</ParamField>
+
+## Environment File Setup
+
+Create a `.env.local` file in your project root:
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_your-secret-key
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+## Variable Naming Convention
+
+<Info>
+**NEXT_PUBLIC_** prefix: Variables with this prefix are exposed to the browser. Only use this for non-sensitive data.
+
+**No prefix:** Server-side only variables. These are never sent to the client and remain secure.
+</Info>
+
+## Vercel Deployment
+
+When deploying to Vercel:
+
+1. Go to your project settings
+2. Navigate to **Environment Variables**
+3. Add each variable with its value
+4. Select the appropriate environments (Production, Preview, Development)
+5. Save and redeploy
+
+<Warning>
+Make sure to update `NEXT_PUBLIC_APP_URL` to your production domain after deployment.
+</Warning>
+
+## Validation
+
+The application validates required environment variables at runtime:
+
+- **Supabase variables** are checked in `/lib/supabase.js` and `/utils/supabase/*.js`
+- Missing variables will throw errors during build or runtime
+- Check server logs if you encounter "Missing environment variables" errors
+
+## Security Best Practices
+
+1. **Never commit** `.env.local` or `.env` to Git
+2. **Rotate keys** if accidentally exposed
+3. **Use different keys** for development and production
+4. **Restrict API keys** in Supabase and Stripe dashboards when possible
+5. **Service role key** should only be imported in server-side files (`/app/api/*`, server actions)

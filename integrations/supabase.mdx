@@ -1,0 +1,400 @@
+---
+title: 'Supabase Integration'
+description: 'Learn how Rubik''s Vintage uses Supabase for database management and authentication'
+---
+
+## Overview
+
+Rubik's Vintage uses Supabase as its backend infrastructure, providing PostgreSQL database management, authentication, and real-time capabilities. The integration follows Next.js 16 best practices with separate client and server-side configurations.
+
+## Client Configuration
+
+### Browser Client
+
+For client-side components, use the browser client that leverages Supabase's SSR package:
+
+<CodeGroup>
+```javascript utils/supabase/client.js
+import { createBrowserClient } from '@supabase/ssr'
+
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+}
+```
+
+```javascript Usage Example
+import { createClient } from '@/utils/supabase/client'
+
+const supabase = createClient()
+const { data: products } = await supabase
+  .from('products')
+  .select('*')
+```
+</CodeGroup>
+
+### Server Client
+
+For server-side operations (API routes, Server Components), use the server client that handles cookies:
+
+<CodeGroup>
+```javascript utils/supabase/server.js
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export async function createClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {}
+        },
+      },
+    }
+  )
+}
+```
+
+```javascript API Route Example
+import { createClient } from '@/utils/supabase/server'
+
+export async function GET(request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  }
+  
+  // Your logic here
+}
+```
+</CodeGroup>
+
+### Admin Client
+
+For administrative operations that bypass Row Level Security (RLS), use the admin client:
+
+<CodeGroup>
+```javascript utils/supabase/admin.js
+import { createClient } from '@supabase/supabase-js'
+
+export const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
+```
+</CodeGroup>
+
+<Warning>
+The admin client uses the service role key and bypasses all RLS policies. Only use it for trusted server-side operations.
+</Warning>
+
+## Database Schema
+
+Rubik's Vintage uses the following main tables:
+
+### Products Table
+
+Stores vintage jewelry product information:
+
+```sql
+-- Key fields used in the application
+products (
+  id,
+  name,
+  base_price,
+  image_url,
+  category_id,
+  created_at
+)
+```
+
+**Usage Example:**
+
+<CodeGroup>
+```javascript Fetch Products
+const { data: products } = await supabase
+  .from('products')
+  .select('*, categories(name)')
+  .order('created_at', { ascending: false })
+```
+
+```javascript Fetch Single Product
+const { data: product } = await supabase
+  .from('products')
+  .select('*')
+  .eq('id', productId)
+  .single()
+```
+
+```javascript Insert Product
+const { error } = await supabase
+  .from('products')
+  .insert([{
+    name: 'Vintage Ring',
+    base_price: 1500,
+    image_url: 'https://...',
+    category_id: 1
+  }])
+```
+</CodeGroup>
+
+### Categories Table
+
+Organizes products by type:
+
+```sql
+categories (
+  id,
+  name
+)
+```
+
+**Usage Example:**
+
+```javascript
+const { data: categories } = await supabase
+  .from('categories')
+  .select('name')
+  .order('name', { ascending: true })
+```
+
+### Orders Table
+
+Stores customer orders with payment information:
+
+```sql
+orders (
+  id,
+  user_id,
+  status,
+  total_amount,
+  stripe_payment_intent,
+  customer_email,
+  customer_name,
+  shipping_address,
+  phone,
+  notes
+)
+```
+
+**Usage Example:**
+
+<CodeGroup>
+```javascript Create Order
+const { data: order } = await supabase
+  .from('orders')
+  .insert([{
+    user_id: session.metadata.user_id,
+    status: 'pagado',
+    total_amount: session.amount_total / 100,
+    stripe_payment_intent: session.payment_intent,
+    customer_email: session.customer_email,
+    customer_name: session.metadata.customer_name,
+    shipping_address: session.metadata.shipping_address,
+    phone: session.metadata.customer_phone,
+    notes: session.metadata.notes
+  }])
+  .select()
+  .single()
+```
+
+```javascript Check Duplicate Orders
+const { data: existing } = await supabase
+  .from('orders')
+  .select('id')
+  .eq('stripe_payment_intent', paymentIntentId)
+  .single()
+```
+</CodeGroup>
+
+### Item Order Table
+
+Stores individual items within each order:
+
+```sql
+item_order (
+  order_id,
+  variant_id,
+  quantity,
+  unit_price
+)
+```
+
+**Usage Example:**
+
+```javascript
+const itemsToInsert = items.map((item) => ({
+  order_id: order.id,
+  variant_id: null,
+  quantity: item.quantity,
+  unit_price: item.unit_price
+}))
+
+const { error } = await supabase
+  .from('item_order')
+  .insert(itemsToInsert)
+```
+
+### Store Config Table
+
+Stores global configuration like shipping fees:
+
+```sql
+store_config (
+  shipping_fee
+)
+```
+
+**Usage Example:**
+
+```javascript
+const { data: storeConfig } = await supabase
+  .from('store_config')
+  .select('shipping_fee')
+  .single()
+
+const shippingFee = storeConfig?.shipping_fee || 0
+```
+
+## Authentication
+
+Supabase handles all authentication for Rubik's Vintage, including user registration, login, and session management.
+
+### User Registration
+
+<CodeGroup>
+```javascript Sign Up
+const { error } = await supabase.auth.signUp({
+  email,
+  password,
+  options: {
+    data: {
+      first_name: firstName,
+      last_name: lastName,
+      full_name: `${firstName} ${lastName}`
+    }
+  }
+})
+```
+</CodeGroup>
+
+<Note>
+User metadata (first_name, last_name, full_name) is stored in the auth.users table and can be accessed via `user.user_metadata`.
+</Note>
+
+### User Login
+
+```javascript
+const { error } = await supabase.auth.signInWithPassword({ 
+  email, 
+  password 
+})
+
+if (!error) {
+  router.push('/inventory')
+  router.refresh()
+}
+```
+
+### User Logout
+
+```javascript
+await supabase.auth.signOut()
+router.push('/login')
+```
+
+### Get Current User
+
+<CodeGroup>
+```javascript Server-side
+const supabase = await createClient()
+const { data: { user } } = await supabase.auth.getUser()
+
+if (!user) {
+  return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+}
+```
+
+```javascript Client-side
+const supabase = createClient()
+const { data: { user } } = await supabase.auth.getUser()
+```
+</CodeGroup>
+
+## Environment Variables
+
+Add these environment variables to your `.env.local` file:
+
+```bash .env.local
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+<Warning>
+- Keep `NEXT_PUBLIC_*` variables for client-side access
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` to the client
+- Store the service role key securely in your deployment environment
+</Warning>
+
+## Best Practices
+
+### Security
+
+1. **Always verify data server-side**: Never trust client-provided prices or quantities
+2. **Use RLS policies**: Implement Row Level Security policies in Supabase for data protection
+3. **Separate clients**: Use server client for authenticated operations, browser client for public data
+
+### Error Handling
+
+```javascript
+const { data, error } = await supabase
+  .from('products')
+  .select('*')
+
+if (error) {
+  console.error('Error fetching products:', error.message)
+  // Handle error appropriately
+}
+```
+
+### Query Optimization
+
+<CodeGroup>
+```javascript Efficient Join
+// Good: Use select with foreign key
+const { data } = await supabase
+  .from('products')
+  .select('*, categories(name)')
+```
+
+```javascript Filtered Queries
+// Use specific filters to reduce data transfer
+const { data } = await supabase
+  .from('products')
+  .select('id, name, base_price')
+  .eq('category_id', categoryId)
+  .limit(20)
+```
+</CodeGroup>
+
+## Related Resources
+
+- [Supabase Documentation](https://supabase.com/docs)
+- [Supabase SSR Package](https://supabase.com/docs/guides/auth/server-side/nextjs)
+- [Stripe Integration](/integrations/stripe)

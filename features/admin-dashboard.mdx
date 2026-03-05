@@ -1,0 +1,506 @@
+---
+title: "Admin Dashboard"
+description: "Comprehensive admin panel for managing products, orders, and store operations"
+---
+
+The Admin Dashboard provides store owners with powerful tools to manage their vintage jewelry business, from inventory management to order processing.
+
+## Overview
+
+The admin panel is a separate authenticated section with dedicated routes under `(admin)` that provides complete store management capabilities.
+
+<CardGroup cols={2}>
+  <Card title="Dashboard Overview" icon="chart-line">
+    Real-time metrics and recent activity
+  </Card>
+  <Card title="Inventory Management" icon="box">
+    Add, edit, and organize products
+  </Card>
+  <Card title="Order Processing" icon="shopping-bag">
+    Track and manage customer orders
+  </Card>
+  <Card title="Customer Management" icon="users">
+    View and manage customer information
+  </Card>
+</CardGroup>
+
+## Dashboard Page
+
+The main dashboard (`/dashboard/page.jsx`) provides an at-a-glance view of store performance.
+
+### Key Metrics
+
+Four primary stat cards display critical business metrics:
+
+<CardGroup cols={2}>
+  <Card title="Total Revenue" icon="dollar-sign">
+    $128,430 with +12.5% trend indicator
+  </Card>
+  <Card title="Active Orders" icon="shopping-bag">
+    45 orders with 12 pending shipment
+  </Card>
+  <Card title="Inventory Count" icon="package">
+    124 products with 8 low stock alerts
+  </Card>
+  <Card title="Total Customers" icon="users">
+    892 customers with +5.2% growth
+  </Card>
+</CardGroup>
+
+### Stat Card Design
+
+```jsx
+<div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+  {/* Icon with color coding */}
+  <div className="p-2 rounded-lg bg-gray-50">
+    <DollarSign className="text-green-600" size={20} />
+  </div>
+  
+  {/* Trend badge */}
+  <span className="text-green-600 bg-green-50 px-2 py-1 rounded-full">
+    <TrendingUp size={10} /> +12.5%
+  </span>
+  
+  {/* Metric display */}
+  <p className="text-xs uppercase tracking-widest text-gray-400">Ingresos Totales</p>
+  <h3 className="text-2xl font-bold text-black">$128,430</h3>
+  <p className="text-[10px] text-gray-500">12 pendientes de envío</p>
+</div>
+```
+
+### Recent Orders Table
+
+Displays the latest orders with key information:
+
+**Columns**
+- Order ID (e.g., #ORD-7829)
+- Customer name
+- Order date
+- Amount in MXN
+- Status badge
+
+**Status Types**
+- **Enviado** (Shipped): Blue badge
+- **Procesando** (Processing): Purple badge
+- **Pendiente** (Pending): Yellow badge
+
+```jsx
+<span className={
+  order.status === 'Enviado' ? 'bg-blue-50 text-blue-600' : 
+  order.status === 'Procesando' ? 'bg-purple-50 text-purple-600' : 
+  'bg-yellow-50 text-yellow-600'
+}>
+  {order.status}
+</span>
+```
+
+### Inventory Status Card
+
+Dark-themed card highlighting urgent inventory needs:
+
+```jsx
+<div className="bg-black text-white rounded-xl p-8">
+  <h2 className="text-xl font-serif italic">Estado del Inventario</h2>
+  <p className="text-gray-400 text-sm">
+    Tienes piezas que necesitan atención inmediata.
+  </p>
+  
+  {/* Alert metrics */}
+  <div className="space-y-6">
+    <div className="flex justify-between border-b border-white/10 pb-4">
+      <span>Sin Stock</span>
+      <span className="text-3xl font-bold text-red-400">3</span>
+    </div>
+    <div className="flex justify-between border-b border-white/10 pb-4">
+      <span>Stock Bajo</span>
+      <span className="text-3xl font-bold text-yellow-400">8</span>
+    </div>
+  </div>
+  
+  <button className="w-full bg-white text-black py-4 hover:bg-gray-200">
+    Gestionar Inventario
+  </button>
+</div>
+```
+
+## Inventory Management
+
+The inventory page (`/inventory/page.jsx`) provides comprehensive product management.
+
+### Features Overview
+
+<CardGroup cols={2}>
+  <Card title="Add Products" icon="plus">
+    Form with image upload and preview
+  </Card>
+  <Card title="Edit Products" icon="pencil">
+    Modal-based editing with all fields
+  </Card>
+  <Card title="Delete Products" icon="trash">
+    Confirmation dialog for safe deletion
+  </Card>
+  <Card title="Search & Filter" icon="search">
+    Real-time product search by name
+  </Card>
+</CardGroup>
+
+### Add Product Form
+
+Split-screen layout with form and live preview:
+
+**Left Side (7 columns)**: Input form
+- Image upload with preview
+- Product name field
+- Category dropdown
+- Price input (large serif display)
+- Description textarea
+- Submit button
+
+**Right Side (5 columns)**: Live preview
+- Shows how product will appear in catalog
+- Updates in real-time as form is filled
+- Displays in product card format
+- Includes placeholder icons for shipping/quality badges
+
+### Image Upload System
+
+```javascript
+const handleImageChange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    setImageFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+};
+
+// On submit, upload to Supabase Storage
+const fileExt = imageFile.name.split(".").pop();
+const fileName = `${Math.random()}.${fileExt}`;
+const { error } = await supabase.storage
+  .from("product_image")
+  .upload(fileName, imageFile);
+```
+
+**Upload UI**
+```jsx
+<div className="relative w-full aspect-video border-2 border-dashed">
+  {previewUrl ? (
+    <Image src={previewUrl} fill className="object-cover" />
+  ) : (
+    <div className="text-center">
+      <Camera className="text-[#A07F3A]" size={22} />
+      <p>Haz clic para subir</p>
+    </div>
+  )}
+  <input type="file" accept="image/*" className="absolute inset-0 opacity-0" />
+</div>
+```
+
+<Tip>
+  The image upload area shows a camera icon when empty and displays a preview with hover overlay when an image is selected, providing clear visual feedback.
+</Tip>
+
+### Product Grid Display
+
+Products are shown in a responsive grid (2-4 columns):
+
+```jsx
+<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+  {products.map((product) => (
+    <div className="bg-white rounded-2xl border border-black/5 group">
+      {/* Product image with hover actions */}
+      <div className="relative aspect-3/4 bg-[#F5F1EB]">
+        <Image src={product.image_url} fill className="object-cover group-hover:scale-105" />
+        
+        {/* Hover overlay with edit/delete buttons */}
+        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100">
+          <button onClick={() => setEditingProduct(product)}>
+            <Pencil size={14} />
+          </button>
+          <button onClick={() => handleDelete(product.id)}>
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      
+      {/* Product info */}
+      <div className="p-3 space-y-1">
+        <p className="text-[10px] uppercase font-bold truncate">{product.name}</p>
+        <p className="text-xs font-serif text-[#A07F3A]">
+          ${parseFloat(product.base_price).toLocaleString()} MXN
+        </p>
+        <p className="text-[9px] text-black/25 uppercase">{product.categories?.name}</p>
+      </div>
+    </div>
+  ))}
+</div>
+```
+
+### Edit Modal
+
+Modal overlay for editing existing products:
+
+**Features**
+- Full-screen overlay with backdrop blur
+- Scroll-enabled content area
+- Pre-populated form fields
+- Image change option with preview
+- Cancel and Save buttons
+- Loading state during save
+
+**Layout**
+```jsx
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  {/* Dark backdrop */}
+  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+  
+  {/* Modal content */}
+  <div className="relative bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    {/* Sticky header */}
+    <div className="sticky top-0 bg-white px-8 py-6 border-b">
+      <h2>Editar Pieza</h2>
+      <button onClick={onClose}><X /></button>
+    </div>
+    
+    {/* Form fields */}
+    <form onSubmit={handleSubmit} className="p-8 space-y-6">
+      {/* Image, name, category, price, description */}
+      
+      <div className="flex gap-3">
+        <button type="button" onClick={onClose}>Cancelar</button>
+        <button type="submit" disabled={loading}>Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+```
+
+### Search Functionality
+
+```javascript
+const [search, setSearch] = useState("");
+
+const filtered = products.filter((p) =>
+  p.name.toLowerCase().includes(search.toLowerCase())
+);
+```
+
+**Search UI**
+```jsx
+<div className="relative">
+  <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2" />
+  <input
+    type="text"
+    placeholder="Buscar pieza..."
+    className="w-full bg-white border rounded-full pl-10 pr-4 py-3"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+  />
+</div>
+```
+
+### Success Notifications
+
+After saving products, a success notification appears:
+
+```jsx
+{showSuccess && <NotificationSuccess />}
+
+const handleSaved = () => {
+  setShowSuccess(true);
+  fetchProducts(); // Refresh list
+  setTimeout(() => setShowSuccess(false), 3000);
+};
+```
+
+## Order Management
+
+The orders page (`/orders/page.jsx`) provides order tracking and management.
+
+### Quick Stats
+
+Three key metrics displayed at the top:
+
+<CardGroup cols={3}>
+  <Card title="Pending" icon="clock">
+    12 orders awaiting processing (amber badge)
+  </Card>
+  <Card title="In Transit" icon="truck">
+    5 orders currently shipping (blue badge)
+  </Card>
+  <Card title="Delivered" icon="check-circle">
+    48 completed orders (green badge)
+  </Card>
+</CardGroup>
+
+### Orders Table
+
+Comprehensive table with responsive design:
+
+**Desktop Columns**
+- Order ID (e.g., #ZA-2021)
+- Customer name and email
+- Order date
+- Total amount in MXN
+- Status badge
+- Action button (chevron)
+
+**Mobile Optimization**
+- Date column hidden on mobile
+- Horizontal scroll enabled
+- Email truncated with `max-w-[100px]`
+- Touch-optimized row height
+
+```jsx
+<table className="w-full text-left">
+  <thead>
+    <tr className="bg-[#F9F8F6] text-[9px] uppercase tracking-[0.2em]">
+      <th className="px-8 py-5">Pedido</th>
+      <th className="px-8 py-5">Cliente</th>
+      <th className="px-8 py-5 hidden md:table-cell">Fecha</th>
+      <th className="px-8 py-5">Total</th>
+      <th className="px-8 py-5">Estado</th>
+      <th className="px-8 py-5 text-right">Acción</th>
+    </tr>
+  </thead>
+  <tbody className="divide-y divide-black/5">
+    {orders.map((order) => (
+      <tr className="group hover:bg-[#F5F1EB]/30">
+        <td className="px-8 py-6 font-serif italic font-bold">{order.id}</td>
+        <td className="px-8 py-6">
+          <p className="text-xs font-bold">{order.customer}</p>
+          <p className="text-[9px] text-black/40 truncate">{order.email}</p>
+        </td>
+        <td className="px-8 py-6 hidden md:table-cell">{order.date}</td>
+        <td className="px-8 py-6 font-serif text-[#A07F3A]">{order.amount}</td>
+        <td className="px-8 py-6">
+          <span className="px-3 py-1 rounded-full text-[8px] uppercase">
+            {order.status}
+          </span>
+        </td>
+        <td className="px-8 py-6 text-right">
+          <button className="p-2 hover:bg-white rounded-full">
+            <ChevronRight size={16} />
+          </button>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+```
+
+### Search & Filter
+
+**Search Bar**
+- Search by order ID or customer name
+- Real-time filtering
+- Icon-prefixed input field
+
+**Filter Button**
+- "Filtrar" button with filter icon
+- Planned for status filtering
+- Hover state with background change
+
+## Admin Layout
+
+The admin section uses a dedicated layout (`(admin)/layout.jsx`):
+
+### Components
+
+<CardGroup cols={2}>
+  <Card title="Admin Navbar" icon="navigation">
+    Top navigation bar with branding and user menu
+  </Card>
+  <Card title="Sidebar Navigation" icon="sidebar">
+    Vertical menu with icons for all admin sections
+  </Card>
+</CardGroup>
+
+### Navigation Links
+
+- **Dashboard**: Overview and metrics
+- **Inventory**: Product management
+- **Orders**: Order processing
+- **Customers**: Customer database
+- **Settings**: Store configuration
+
+## Authentication & Access Control
+
+All admin routes are protected:
+
+```javascript
+// Check if user is authenticated and has admin role
+const { data: { user } } = await supabase.auth.getUser();
+
+if (!user) {
+  redirect('/login');
+}
+
+// Check admin role
+const { data: profile } = await supabase
+  .from('profiles')
+  .select('role')
+  .eq('id', user.id)
+  .single();
+
+if (profile?.role !== 'admin') {
+  redirect('/');
+}
+```
+
+<Note>
+  The admin panel should include role-based access control to ensure only authorized users can access administrative features.
+</Note>
+
+## Design System
+
+The admin interface maintains the brand aesthetic while prioritizing functionality:
+
+**Color Scheme**
+- White backgrounds for content cards
+- Warm cream (`#F5F1EB`, `#F9F8F6`) for subtle backgrounds
+- Black for text and primary buttons
+- Gold accents (`#A07F3A`, `#C4A95E`) for highlights
+- Status colors: Blue (shipped), purple (processing), yellow (pending), red (alerts)
+
+**Typography**
+- Serif italic for headings ("Panel de Control")
+- Uppercase tracking for labels and section titles
+- Font size hierarchy: 3xl for page titles → xs for labels
+- Monospace for order IDs
+
+**Spacing & Layout**
+- Generous padding (p-6, p-8)
+- Consistent border radius (rounded-xl, rounded-3xl)
+- Subtle borders (border-black/5)
+- Soft shadows (shadow-sm, shadow-md)
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Real-time Updates" icon="refresh">
+    Data refreshed after create/update/delete operations
+  </Card>
+  <Card title="Optimistic UI" icon="zap">
+    Immediate feedback during async operations
+  </Card>
+  <Card title="Loading States" icon="loader">
+    Spinners and disabled states during processing
+  </Card>
+  <Card title="Error Handling" icon="alert-triangle">
+    Try-catch blocks with user-friendly error messages
+  </Card>
+</CardGroup>
+
+## Future Enhancements
+
+Potential admin features to add:
+
+- Analytics dashboard with charts
+- Bulk product import/export
+- Order status updates with customer notifications
+- Inventory low-stock alerts
+- Customer communication tools
+- Sales reports and revenue tracking
+- Role-based permissions for team members
+- Activity log/audit trail

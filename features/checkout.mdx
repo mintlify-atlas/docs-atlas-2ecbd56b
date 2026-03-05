@@ -1,0 +1,414 @@
+---
+title: "Checkout & Payments"
+description: "Secure payment processing with Stripe integration and order confirmation"
+---
+
+Rubik's Vintage uses Stripe for secure payment processing, providing customers with a smooth checkout experience from cart to confirmation.
+
+## Overview
+
+The checkout system handles customer data collection, payment processing via Stripe, and order confirmation with a secure, server-side verification flow.
+
+<CardGroup cols={2}>
+  <Card title="Stripe Integration" icon="credit-card">
+    Industry-standard secure payment processing
+  </Card>
+  <Card title="Server Verification" icon="shield-check">
+    Prices verified server-side for security
+  </Card>
+  <Card title="Order Tracking" icon="package">
+    Session metadata stores complete order details
+  </Card>
+  <Card title="Email Confirmation" icon="envelope">
+    Automatic confirmation sent to customer
+  </Card>
+</CardGroup>
+
+## Checkout Flow
+
+The complete checkout process follows these steps:
+
+### 1. Cart to Checkout
+
+Customers click "Finalizar Compra" in the cart sidebar:
+- Navigates to `/checkout` page
+- Cart contents displayed in summary sidebar
+- Empty cart redirects to empty state
+
+### 2. Customer Information Form
+
+Customers enter shipping details:
+
+<CardGroup cols={2}>
+  <Card title="Full Name" icon="user">
+    Required field for delivery recipient
+  </Card>
+  <Card title="Phone Number" icon="phone">
+    Contact number for delivery coordination
+  </Card>
+  <Card title="Shipping Address" icon="map-pin">
+    Complete address with street, city, state, postal code
+  </Card>
+  <Card title="Order Notes" icon="file-text">
+    Optional special instructions
+  </Card>
+</CardGroup>
+
+### 3. Server-Side Payment Setup
+
+When form is submitted, the checkout API route processes the request:
+
+```javascript
+// POST /api/checkout/route.js
+
+1. Verify user authentication
+2. Validate cart has items
+3. Fetch real prices from database
+4. Create Stripe checkout session
+5. Return Stripe URL to client
+```
+
+### 4. Stripe Hosted Checkout
+
+Customer is redirected to Stripe's secure payment page:
+- Stripe-hosted payment form
+- PCI-compliant card processing
+- Multiple payment method support
+- Automatic fraud detection
+
+### 5. Success Confirmation
+
+After successful payment:
+- Redirect to `/checkout/success?session_id={CHECKOUT_SESSION_ID}`
+- Verify payment with Stripe
+- Display order confirmation
+- Clear cart
+
+## Checkout API Route
+
+The checkout API (`app/api/checkout/route.js`) handles secure payment setup.
+
+### Authentication Check
+
+```javascript
+const supabase = await createClient();
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) {
+  return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+}
+```
+
+<Note>
+  All checkout requests require authenticated users. Unauthenticated requests return a 401 error and redirect to login.
+</Note>
+
+### Price Verification
+
+Critical security step - never trust client-side prices:
+
+```javascript
+// Extract product IDs from cart
+const productIds = items.map((i) => i.id);
+
+// Fetch real prices from database
+const { data: products } = await supabase
+  .from("products")
+  .select("id, name, base_price, image_url")
+  .in("id", productIds);
+
+// Verify each item exists and use database price
+const lineItems = items.map((item) => {
+  const product = products.find((p) => p.id === item.id);
+  if (!product) throw new Error(`Producto no encontrado: ${item.id}`);
+  return {
+    price_data: {
+      currency: "mxn",
+      unit_amount: Math.round(product.base_price * 100), // Convert to cents
+      product_data: { name: product.name }
+    },
+    quantity: item.quantity
+  };
+});
+```
+
+<Tip>
+  Stripe requires amounts in the smallest currency unit (centavos for MXN). The code multiplies by 100 and rounds to ensure proper conversion.
+</Tip>
+
+### Stripe Session Creation
+
+Create a Stripe Checkout Session with complete order metadata:
+
+```javascript
+const session = await stripe.checkout.sessions.create({
+  payment_method_types: ["card"],
+  line_items: lineItems,
+  mode: "payment",
+  
+  // Shipping configuration
+  shipping_options: [{
+    shipping_rate_data: {
+      type: "fixed_amount",
+      fixed_amount: { amount: shippingFee * 100, currency: "mxn" },
+      display_name: "Envío estándar"
+    }
+  }],
+  
+  // Customer info
+  customer_email: user.email,
+  
+  // Order metadata (stored with payment)
+  metadata: {
+    user_id: user.id,
+    customer_name: customerData.fullName,
+    customer_phone: customerData.phone,
+    shipping_address: customerData.address,
+    notes: customerData.notes || "",
+    items: JSON.stringify(items) // Complete order details
+  },
+  
+  // Redirect URLs
+  success_url: `${APP_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+  cancel_url: `${APP_URL}/checkout`
+});
+```
+
+### Metadata Storage
+
+All order details are stored in Stripe's session metadata:
+
+- **User Information**: ID and email from authentication
+- **Customer Details**: Name and phone for delivery
+- **Shipping Address**: Complete address string
+- **Order Notes**: Any special instructions
+- **Items Array**: Full cart with IDs, quantities, and verified prices
+
+<Note>
+  Storing order details in Stripe metadata ensures you can retrieve complete order information even if your database is unavailable during webhook processing.
+</Note>
+
+## Shipping Configuration
+
+Shipping fees are dynamically loaded from the `store_config` table:
+
+```javascript
+const { data: storeConfig } = await supabase
+  .from("store_config")
+  .select("shipping_fee")
+  .single();
+
+const shippingFee = storeConfig?.shipping_fee || 0;
+```
+
+Shipping options are only added if a fee is configured:
+
+```javascript
+shipping_options: shippingFee > 0 ? [
+  {
+    shipping_rate_data: {
+      type: "fixed_amount",
+      fixed_amount: { amount: shippingFee * 100, currency: "mxn" },
+      display_name: "Envío estándar"
+    }
+  }
+] : []
+```
+
+## Checkout Page UI
+
+The checkout page (`/checkout/page.jsx`) provides a clean, split-screen layout.
+
+### Layout Structure
+
+**Left Side (7 columns)**: Customer form
+- Shipping information header
+- Form fields with icons
+- Submit button with loading state
+- Security badge ("Pago seguro procesado por Stripe")
+
+**Right Side (5 columns)**: Order summary
+- "Tu Selección" header
+- List of cart items with thumbnails
+- Subtotal calculation
+- Shipping note ("Se calcula al pagar")
+- Total display
+
+### Form Fields
+
+All fields use elegant styling with focus states:
+
+```jsx
+<input
+  type="text"
+  required
+  placeholder="Ej. Ana García López"
+  className="w-full border-b border-black/10 py-2 
+             focus:border-[#C4A95E] outline-none 
+             bg-transparent text-sm"
+  value={formData.fullName}
+  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+/>
+```
+
+### Submit Button States
+
+**Default State**
+```jsx
+<Lock size={14} /> Proceder al Pago
+```
+
+**Loading State**
+```jsx
+<Loader2 className="animate-spin" size={16} /> Procesando...
+```
+
+### Empty Cart Handling
+
+If cart is empty, display friendly empty state:
+
+```jsx
+<div className="min-h-[70vh] flex flex-col items-center justify-center">
+  <ShoppingBag size={48} />
+  <p>Tu bolsa está vacía</p>
+  <button onClick={() => router.push("/")}>Explorar colección</button>
+</div>
+```
+
+## Success Page
+
+The success page (`/checkout/success/page.jsx`) confirms successful payment.
+
+### Verification Flow
+
+```javascript
+const sessionId = searchParams.get("session_id");
+
+// Verify session with Stripe
+const res = await fetch(`/api/checkout/verify?session_id=${sessionId}`);
+const data = await res.json();
+
+if (res.ok) {
+  setOrderData(data);
+  clearCart(); // Remove items from cart
+  setStatus("success");
+}
+```
+
+### Success Display
+
+**Confirmation Card**
+- Large check circle icon (green/gold)
+- "¡Gracias por tu pedido!" heading
+- "Tu selección está confirmada" subheading
+
+**Order Details**
+- Customer name
+- Order ID (first 8 characters, uppercase)
+- Total amount paid
+
+**Next Steps Message**
+```
+Recibirás un correo de confirmación. 
+Nos pondremos en contacto contigo pronto para coordinar el envío.
+```
+
+**Return Button**
+- "Seguir Explorando" button
+- Returns to homepage
+
+### Loading States
+
+**Verifying Payment**
+```jsx
+<Loader2 className="animate-spin" size={32} />
+<p>Confirmando tu pedido...</p>
+```
+
+**Error State**
+```jsx
+<p>Hubo un problema al confirmar tu pedido.</p>
+<p>Si realizaste el pago, contáctanos para confirmar tu pedido.</p>
+```
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="Server-Side Verification" icon="server">
+    All prices verified from database, never trust client
+  </Card>
+  <Card title="Authentication Required" icon="lock">
+    Users must be logged in to checkout
+  </Card>
+  <Card title="Stripe PCI Compliance" icon="shield">
+    Payment data never touches your server
+  </Card>
+  <Card title="Session Validation" icon="check-circle">
+    Success page verifies payment before confirmation
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+Comprehensive error handling throughout:
+
+**API Errors**
+```javascript
+try {
+  // Payment processing
+} catch (error) {
+  console.error("Stripe error:", error);
+  return NextResponse.json({ error: error.message }, { status: 500 });
+}
+```
+
+**Client-Side Errors**
+```javascript
+if (!response.ok) throw new Error(data.error);
+// Display error in red banner above submit button
+```
+
+## Payment Methods
+
+Currently configured for card payments:
+
+```javascript
+payment_method_types: ["card"]
+```
+
+<Tip>
+  Stripe Checkout supports many payment methods. You can enable additional methods like Apple Pay, Google Pay, or bank transfers by adding them to the `payment_method_types` array.
+</Tip>
+
+## Redirect URLs
+
+Two redirect scenarios:
+
+**Success**: `/checkout/success?session_id={CHECKOUT_SESSION_ID}`
+- Includes session ID for verification
+- Triggers order confirmation flow
+
+**Cancel**: `/checkout`
+- Returns to checkout form
+- Cart remains intact
+- User can modify information and retry
+
+## Mobile Optimization
+
+Checkout is fully responsive:
+
+- Single column layout on mobile
+- Order summary appears below form on small screens
+- Touch-optimized form inputs
+- Large, easy-to-tap submit button
+- Sticky order summary on desktop
+
+## Future Enhancements
+
+Potential improvements:
+
+- Webhook handler for inventory reduction
+- Order status tracking in customer dashboard
+- Email notifications via Stripe
+- Multiple payment methods
+- Coupon/discount code support
+- Guest checkout option

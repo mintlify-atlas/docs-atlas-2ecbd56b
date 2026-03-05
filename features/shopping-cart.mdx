@@ -1,0 +1,293 @@
+---
+title: "Shopping Cart"
+description: "Smart cart management with persistent storage and seamless checkout integration"
+---
+
+The Shopping Cart system in Rubik's Vintage provides a smooth, elegant experience for managing items before checkout, with persistent storage and real-time updates.
+
+## Overview
+
+The cart is powered by React Context and localStorage, ensuring cart contents persist across browser sessions and page refreshes.
+
+<CardGroup cols={2}>
+  <Card title="Persistent Storage" icon="database">
+    Cart saved to localStorage automatically
+  </Card>
+  <Card title="Real-time Updates" icon="refresh">
+    Instant quantity changes and total calculations
+  </Card>
+  <Card title="Slide-out Sidebar" icon="sidebar">
+    Non-intrusive cart access from any page
+  </Card>
+  <Card title="Smart Quantities" icon="calculator">
+    Increment, decrement, or remove items easily
+  </Card>
+</CardGroup>
+
+## Cart Context Architecture
+
+The cart system uses React Context to provide global state management throughout the application.
+
+### Context Provider
+
+Located at `context/CartContext.jsx`, the provider manages all cart operations:
+
+```javascript
+const CartContext = createContext();
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  // ... cart operations
+}
+```
+
+### Available Methods
+
+<CardGroup cols={2}>
+  <Card title="addToCart(product)" icon="plus">
+    Adds item or increments quantity if already in cart
+  </Card>
+  <Card title="removeFromCart(id)" icon="trash">
+    Removes item completely from cart
+  </Card>
+  <Card title="updateQuantity(id, qty)" icon="edit">
+    Updates item quantity or removes if qty ≤ 0
+  </Card>
+  <Card title="clearCart()" icon="x">
+    Empties entire cart (used after checkout)
+  </Card>
+</CardGroup>
+
+### Computed Values
+
+```javascript
+// Total number of items (sum of all quantities)
+const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+
+// Total price in MXN
+const cartTotal = cart.reduce(
+  (total, item) => total + item.base_price * item.quantity,
+  0
+);
+```
+
+## Persistent Storage
+
+Cart data automatically syncs with browser localStorage.
+
+### How It Works
+
+**On Initial Load**
+```javascript
+useEffect(() => {
+  const saved = localStorage.getItem('zalea_cart');
+  if (saved) {
+    setCart(JSON.parse(saved));
+  }
+  setIsLoaded(true);
+}, []);
+```
+
+**On Cart Changes**
+```javascript
+useEffect(() => {
+  if (isLoaded) {
+    localStorage.setItem('zalea_cart', JSON.stringify(cart));
+  }
+}, [cart, isLoaded]);
+```
+
+<Note>
+  The `isLoaded` flag prevents overwriting localStorage during the initial hydration, ensuring saved cart data isn't lost on page refresh.
+</Note>
+
+## Cart Sidebar UI
+
+The cart appears as a slide-out sidebar from the right side of the screen.
+
+### Visual Design
+
+**Header Section**
+- "Tu Selección" (Your Selection) title in serif italic
+- Item count display (e.g., "5 piezas")
+- Close button (X) with rotation animation on hover
+- Warm beige background (`#DBD2C8`)
+
+**Cart Items Area**
+- Scrollable container for multiple items
+- White item cards with rounded corners
+- Product thumbnail (16×20 aspect ratio)
+- Product name in uppercase with wide tracking
+- Price calculation (unit price × quantity)
+- Quantity controls with +/- buttons
+- Delete button per item
+
+**Footer Section**
+- Subtotal display in large serif font
+- "Vaciar bolsa" (Empty cart) button
+- "Finalizar Compra" (Complete Purchase) button
+- Sticky positioning at bottom
+
+<Tip>
+  The sidebar includes smooth slide-in animation from the right: `animate-in slide-in-from-right duration-500`
+</Tip>
+
+## Cart Item Management
+
+### Adding Items
+
+When a product is added to the cart:
+
+1. **Check for Existing Item**: If the product ID already exists, increment quantity
+2. **New Item**: Add product with `quantity: 1`
+3. **Auto-open Sidebar**: Cart sidebar opens automatically
+4. **Visual Feedback**: User sees item appear in real-time
+
+```javascript
+const addToCart = (product) => {
+  setCart((prev) => {
+    const existing = prev.find((item) => item.id === product.id);
+    if (existing) {
+      return prev.map((item) =>
+        item.id === product.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      );
+    }
+    return [...prev, { ...product, quantity: 1 }];
+  });
+  setIsCartOpen(true);
+};
+```
+
+### Quantity Controls
+
+Each cart item has quantity controls:
+
+**UI Components**
+- Minus button (−): Decreases quantity by 1
+- Quantity display: Current count in bold
+- Plus button (+): Increases quantity by 1
+- Circular border design with hover effects
+
+**Logic**
+```javascript
+const updateQuantity = (id, quantity) => {
+  if (quantity <= 0) {
+    removeFromCart(id);
+    return;
+  }
+  setCart((prev) =>
+    prev.map((item) =>
+      item.id === id ? { ...item, quantity } : item
+    )
+  );
+};
+```
+
+<Note>
+  Setting quantity to 0 or below automatically removes the item from the cart, providing a consistent experience.
+</Note>
+
+## Empty Cart State
+
+When the cart is empty, a friendly empty state is displayed:
+
+```jsx
+<div className="h-full flex flex-col items-center justify-center">
+  <ShoppingBag size={44} strokeWidth={0.5} />
+  <p className="text-[10px] uppercase tracking-[0.3em]">
+    Tu bolsa está vacía
+  </p>
+</div>
+```
+
+## Cart Badge
+
+The cart icon in the navigation bar displays a badge with the total item count:
+
+- Displayed when `cartCount > 0`
+- Small circular badge in gold color
+- Shows sum of all item quantities
+- Updates in real-time
+
+## Price Calculations
+
+### Per-Item Display
+
+```javascript
+// Total for this item
+${(item.base_price * item.quantity).toLocaleString()} MXN
+
+// Unit price (shown when quantity > 1)
+${item.base_price.toLocaleString()} c/u
+```
+
+### Cart Totals
+
+**Subtotal**
+- Sum of all items (price × quantity)
+- Displayed in large serif font in footer
+- Uses `toLocaleString()` for thousand separators
+
+**Shipping**
+- Calculated during checkout
+- Not included in cart sidebar
+- Fetched from `store_config` table during payment
+
+<Tip>
+  All prices are stored and calculated in the main currency unit (MXN), not cents. Stripe conversion to centavos happens only in the checkout API.
+</Tip>
+
+## Integration with Checkout
+
+When users click "Finalizar Compra":
+
+1. **Navigation**: Redirects to `/checkout` page
+2. **Cart Validation**: Checkout page verifies cart is not empty
+3. **Item Data**: Full cart contents passed to checkout form
+4. **Price Verification**: Server verifies all prices from database
+5. **Clear on Success**: Cart cleared after successful payment
+
+## Mobile Experience
+
+The cart sidebar is fully optimized for mobile:
+
+- Full-width on mobile devices
+- Touch-optimized buttons and controls
+- Smooth backdrop blur effect
+- Prevents body scroll when open
+- Easy-to-tap close area (backdrop)
+
+## User Experience Features
+
+<CardGroup cols={2}>
+  <Card title="Instant Feedback" icon="zap">
+    All actions update immediately without page reload
+  </Card>
+  <Card title="Visual Polish" icon="sparkles">
+    Smooth animations and hover effects
+  </Card>
+  <Card title="Error Prevention" icon="shield">
+    Auto-removes items at quantity 0, prevents negative values
+  </Card>
+  <Card title="Persistent Data" icon="save">
+    Cart survives page refreshes and browser restarts
+  </Card>
+</CardGroup>
+
+## Accessibility
+
+- Close button with clear X icon
+- Backdrop click to close
+- Keyboard-accessible controls
+- Hover states on all interactive elements
+- Clear visual feedback for all actions
+
+## Performance Optimization
+
+- Efficient React Context prevents unnecessary re-renders
+- localStorage operations debounced through `isLoaded` flag
+- Images lazy-loaded with Next.js Image component
+- Smooth 60fps animations with CSS transforms

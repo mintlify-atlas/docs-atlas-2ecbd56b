@@ -1,0 +1,407 @@
+---
+title: 'Components'
+description: 'Documentation for key React components in the application'
+---
+
+## Overview
+
+Components are organized into two main categories:
+- **Public Components** - Customer-facing storefront UI
+- **Admin Components** - Admin panel interface
+
+## Public Components
+
+### ProductCard
+
+**Location:** `components/public/ProductCard.jsx`
+
+Displays a product with image, name, and price. Opens QuickViewModal on click.
+
+**Props:**
+- `product` (object) - Product data from Supabase
+  - `id` (string)
+  - `name` (string)
+  - `image_url` (string)
+  - `base_price` (number)
+
+**Implementation:**
+
+```jsx
+"use client";
+import Image from "next/image";
+import { useState } from "react";
+import QuickViewModal from "./QuickViewModal";
+
+export default function ProductCard({ product }) {
+  const [showModal, setShowModal] = useState(false);
+
+  return (
+    <>
+      <div className="group cursor-pointer" onClick={() => setShowModal(true)}>
+        <div className="relative aspect-3/4 bg-white overflow-hidden rounded-xl mb-4 shadow-sm">
+          <Image
+            src={product.image_url}
+            alt={product.name}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            className="object-cover transition-transform duration-700 group-hover:scale-110"
+            placeholder="blur"
+            blurDataURL={product.image_url}
+          />
+          <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-6">
+            <span className="bg-white/90 px-4 py-2 text-[8px] uppercase tracking-[0.2em] font-bold backdrop-blur-sm">
+              Vista Rápida
+            </span>
+          </div>
+        </div>
+        <h3 className="text-[11px] uppercase tracking-widest text-black/80 font-medium mb-1 truncate">
+          {product.name}
+        </h3>
+        <p className="text-sm font-serif italic text-[#A07F3A]">
+          ${product.base_price?.toLocaleString()} MXN
+        </p>
+      </div>
+
+      {showModal && (
+        <QuickViewModal
+          product={product}
+          onClose={(e) => {
+            if (e && e.stopPropagation) e.stopPropagation();
+            setShowModal(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+```
+
+**Key Features:**
+- Hover effect with scale transform
+- Quick view overlay on hover
+- Opens modal for product details
+- Optimized Next.js Image component
+
+---
+
+### CartSidebar
+
+**Location:** `components/public/CartSidebar.jsx`
+
+Slide-out sidebar displaying cart items with quantity controls and checkout button.
+
+**Props:**
+- `isOpen` (boolean) - Controls sidebar visibility
+- `onClose` (function) - Callback to close sidebar
+
+**Implementation:**
+
+```jsx
+"use client";
+import { useCart } from "@/context/CartContext";
+import { X, Trash2, ShoppingBag, Minus, Plus } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+
+export default function CartSidebar({ isOpen, onClose }) {
+  const {
+    cart,
+    removeFromCart,
+    cartTotal,
+    updateQuantity,
+    clearCart,
+    cartCount,
+  } = useCart();
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-100 flex justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Sidebar */}
+      <div className="relative w-full max-w-md bg-[#F5F1EB] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
+        {/* Header */}
+        <header className="px-8 py-6 border-b border-black/5 flex justify-between items-center bg-[#DBD2C8]">
+          <div>
+            <h2 className="text-xl font-serif italic text-black">Tu Selección</h2>
+            {cartCount > 0 && (
+              <p className="text-[9px] uppercase tracking-[0.3em] text-black/40 mt-0.5">
+                {cartCount} {cartCount === 1 ? "pieza" : "piezas"}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="hover:rotate-90 transition-transform duration-300">
+            <X size={22} strokeWidth={1} />
+          </button>
+        </header>
+
+        {/* Items List */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {cart.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-black/30 space-y-4">
+              <ShoppingBag size={44} strokeWidth={0.5} />
+              <p className="text-[10px] uppercase tracking-[0.3em]">Tu bolsa está vacía</p>
+            </div>
+          ) : (
+            cart.map((item) => (
+              <div key={item.id} className="flex gap-4 items-center bg-white rounded-xl p-3 shadow-sm">
+                <div className="relative w-16 h-20 rounded-lg overflow-hidden shrink-0 bg-[#F5F1EB]">
+                  <Image src={item.image_url} alt={item.name} fill className="object-cover" />
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[11px] uppercase tracking-widest font-bold text-black truncate">
+                    {item.name}
+                  </h3>
+                  <p className="text-sm font-serif text-[#A07F3A] mt-1">
+                    ${(item.base_price * item.quantity).toLocaleString()} MXN
+                  </p>
+                </div>
+
+                {/* Quantity Controls */}
+                <div className="flex items-center gap-0 border border-black/10 rounded-full overflow-hidden shrink-0">
+                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center">
+                    <Minus size={12} strokeWidth={2} />
+                  </button>
+                  <span className="w-7 text-center text-xs font-bold text-black select-none">{item.quantity}</span>
+                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center">
+                    <Plus size={12} strokeWidth={2} />
+                  </button>
+                </div>
+
+                <button onClick={() => removeFromCart(item.id)} className="text-black/15 hover:text-red-400 transition-colors ml-1 shrink-0">
+                  <Trash2 size={15} strokeWidth={1.5} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <footer className="p-6 border-t border-black/5 bg-white space-y-5">
+          <div className="flex justify-between items-end">
+            <span className="text-[10px] uppercase tracking-[0.3em] text-black/40">Subtotal</span>
+            <span className="text-xl font-serif text-black">${cartTotal.toLocaleString()} MXN</span>
+          </div>
+
+          {cart.length > 0 && (
+            <button onClick={clearCart} className="w-full text-[9px] uppercase tracking-[0.3em] text-black/25 hover:text-black/50 transition-colors py-1">
+              Vaciar bolsa
+            </button>
+          )}
+
+          <Link href="/checkout" className="w-full bg-black text-white py-5 text-[10px] uppercase tracking-[0.4em] font-bold hover:bg-[#A07F3A] transition-all duration-300">
+            Finalizar Compra
+          </Link>
+        </footer>
+      </div>
+    </div>
+  );
+}
+```
+
+**Key Features:**
+- Slide-in animation from right
+- Backdrop with blur effect
+- Quantity increment/decrement controls
+- Real-time cart total calculation
+- Empty cart state
+- Clear cart functionality
+
+---
+
+### Navbar
+
+**Location:** `components/public/Navbar.jsx`
+
+Main navigation bar with authentication, cart badge, and responsive mobile menu.
+
+**Key Features:**
+- User authentication status detection
+- Admin panel access for admin users
+- Cart badge with item count
+- Mobile hamburger menu
+- User dropdown menu
+- Real-time auth state listening
+
+**Code Snippet:**
+
+```jsx
+"use client";
+import { useState, useEffect } from "react";
+import { createClient } from "@/utils/supabase/client"
+import { useCart } from "@/context/CartContext";
+import CartSidebar from "./CartSidebar";
+
+export default function Navbar() {
+  const supabase = createClient();
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const { cartCount, isCartOpen, setIsCartOpen } = useCart();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_admin")
+          .eq("id", currentUser.id)
+          .single();
+        setIsAdmin(profile?.is_admin || false);
+      }
+    };
+
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      checkUser();
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return (
+    <>
+      <nav className="w-full bg-[#F5F1EB]/80 backdrop-blur-md border-b border-[#A07F3A]/20 sticky top-0 z-50">
+        {/* Navigation content */}
+      </nav>
+      <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+    </>
+  );
+}
+```
+
+---
+
+### Hero
+
+**Location:** `components/public/Hero.jsx`
+
+Homepage hero section with image and CTA.
+
+**Implementation:**
+
+```jsx
+import Image from 'next/image';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
+
+export default function Hero() {
+  return (
+    <section className="flex flex-col md:flex-row w-full min-h-[85vh] bg-[#F5F1EB]">
+      <div className="w-full md:w-[45%] flex flex-col justify-center items-start px-12 md:px-24 py-20">
+        <span className="text-[11px] uppercase tracking-[0.4em] text-[#C4A95E] mb-6 font-bold">
+          Fine Jewelry Collection
+        </span>
+        <h2 className="text-4xl md:text-5xl lg:text-7xl font-serif text-black leading-[1.1] mb-8 italic">
+          Esencia que <br/> perdura.
+        </h2>
+        <p className="text-black/60 text-sm md:text-base max-w-sm mb-12 font-light leading-relaxed">
+          Piezas únicas en oro laminado diseñadas para elevar cada momento.
+        </p>
+        <Link href="/products" className="group flex items-center gap-6 text-[10px] uppercase tracking-[0.4em] font-bold">
+          Explorar Tienda
+          <ArrowRight size={16} className="group-hover:translate-x-3 transition-transform duration-500" />
+        </Link>
+      </div>
+
+      <div className="w-full md:w-[55%] relative h-[60vh] md:h-auto">
+        <Image
+          src="https://jewelrydesignhouse.com/cdn/shop/collections/Mermaid_Fine_Jewelry_Collection.jpg"
+          alt="Detalle de joyería ZÁLEA"
+          fill
+          className="object-cover"
+          priority
+        />
+      </div>
+    </section>
+  );
+}
+```
+
+---
+
+## Admin Components
+
+### AdminNavbar
+
+**Location:** `components/admin/AdminNavbar.jsx`
+
+Admin panel top navigation with search and notifications.
+
+```jsx
+"use client";
+import { Bell, Search, User, Home } from 'lucide-react';
+import Link from 'next/link';
+
+export default function AdminNavbar() {
+  return (
+    <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-10 sticky top-0 z-40">
+      <div className="absolute inset-y-0 left-0 flex items-center mr-6">
+        <Link href="/" className="ml-15">
+          <Home className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors" size={16} />
+        </Link>
+      </div>
+      
+      <div className="relative w-96 flex items-center gap-5">
+        <div className="w-full ml-15">
+          <Search className="absolute left-10 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input 
+            type="text" 
+            placeholder="Buscar pedidos, productos..." 
+            className="w-full bg-gray-50 border-none rounded-full py-2 pl-3 pr-4 text-xs"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-6 text-gray-500">
+        <button className="relative hover:text-black transition">
+          <Bell size={20} strokeWidth={1.5} />
+          <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full border-2 border-white"></span>
+        </button>
+        
+        <div className="flex items-center gap-3 cursor-pointer hover:opacity-70 transition">
+          <div className="text-right">
+            <p className="text-[10px] font-bold text-black uppercase tracking-widest">Admin</p>
+            <p className="text-[9px] text-gray-400">Rubik's Vintage</p>
+          </div>
+          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200">
+            <User size={20} className="text-gray-400" />
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+```
+
+---
+
+### Sidebar
+
+**Location:** `components/admin/Sidebar.jsx`
+
+Admin panel sidebar navigation with route highlighting.
+
+**Features:**
+- Active route highlighting
+- Logout functionality
+- Mobile responsive with close button
+- Supabase auth integration
+
+**Code Reference:** `components/admin/Sidebar.jsx:16-93`
+
+## Next Steps
+
+- [State Management](/development/state-management) - Cart context usage
+- [API Routes](/development/api-routes) - Backend integration
+- [Authentication](/development/authentication) - User auth patterns

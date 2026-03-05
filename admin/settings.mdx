@@ -1,0 +1,274 @@
+---
+title: "Store Settings"
+description: "Configure your Rubik's Vintage store settings and preferences"
+---
+
+The settings page (`/settings`) allows you to configure your admin profile, store details, and operational preferences for Rubik's Vintage.
+
+## Settings Overview
+
+The settings page is divided into two main sections:
+
+1. **Administrator Information** - Your personal admin profile
+2. **Store Details** - Store-wide configuration
+
+All changes are saved simultaneously when you click the **"Guardar Cambios"** (Save Changes) button.
+
+## Administrator Information
+
+### Admin Profile Section
+
+This section manages your personal administrator account details:
+
+#### First Name (Nombre)
+Your first name as it appears in the admin panel.
+
+**Field Type:** Text input
+
+**Updates:** `profiles` table in Supabase
+
+#### Last Name (Apellido)
+Your last name for identification purposes.
+
+**Field Type:** Text input
+
+**Updates:** `profiles` table in Supabase
+
+#### Email Address (Correo Electrónico)
+Your admin login email.
+
+**Field Type:** Read-only display
+
+**Note:** Email cannot be changed from the settings page as it's tied to authentication.
+
+<Warning>
+To change your email address, contact your system administrator or use Supabase auth management tools.
+</Warning>
+
+## Store Details (Detalles de la Boutique)
+
+This section configures store-wide settings that affect customer experience:
+
+### Store Name (Nombre del Bazar)
+
+The official name of your vintage jewelry store.
+
+**Field Type:** Text input with serif font
+
+**Example:** "Rubik's Vintage", "ZÁLEA Boutique"
+
+**Used In:**
+- Store header
+- Email communications
+- Invoice documents
+- Meta tags
+
+### Contact Email
+
+Customer-facing email for support and inquiries.
+
+**Field Type:** Email input
+
+**Example:** `contacto@rubiksvintage.com`
+
+**Used For:**
+- Customer support
+- Order confirmations
+- Shipping notifications
+- General inquiries
+
+<Tip>
+Use a dedicated support email rather than your personal admin email to maintain professional communication.
+</Tip>
+
+### Shipping Fee (Costo de Envío)
+
+Default shipping cost added to all orders.
+
+**Field Type:** Number input (MXN)
+
+**Example:** `150`, `250`, `0` (for free shipping)
+
+**Display:** Formatted as `$XXX MXN`
+
+**Used In:**
+- Checkout calculation
+- Cart summary
+- Order totals
+- Product pages
+
+<Note>
+Shipping fee is a flat rate applied to all orders. For complex shipping rules (by weight, region, etc.), custom development is required.
+</Note>
+
+#### Setting Free Shipping
+
+To offer free shipping:
+1. Set shipping fee to `0`
+2. Update announcement bar to promote free shipping
+3. Save changes
+
+### Announcement Bar (Barra de Anuncios)
+
+Text displayed at the top of your storefront.
+
+**Field Type:** Text input
+
+**Character Limit:** ~100 characters recommended
+
+**Example Messages:**
+```
+Envío gratis en compras mayores a $999
+(Free shipping on orders over $999)
+
+🎁 Nueva colección disponible
+(🎁 New collection available)
+
+⚡ Promoción especial - 20% de descuento
+(⚡ Special promotion - 20% off)
+```
+
+**Best Practices:**
+- Keep messages concise and clear
+- Use for promotions and important updates
+- Update regularly to maintain customer engagement
+- Include emojis for visual interest
+
+<Tip>
+Use the announcement bar to promote:
+- Seasonal sales
+- New arrivals
+- Shipping promotions
+- Special events
+- Important notices
+</Tip>
+
+## Saving Changes
+
+After updating any settings:
+
+<Steps>
+  <Step title="Review Your Changes">
+    Double-check all fields for accuracy, especially shipping fees and contact information.
+  </Step>
+  
+  <Step title="Click Save Button">
+    Click the **"Guardar Cambios"** (Save Changes) button at the bottom of the page.
+    
+    The button shows a loading spinner while saving.
+  </Step>
+  
+  <Step title="Wait for Confirmation">
+    A success notification appears at the top confirming your changes were saved.
+  </Step>
+</Steps>
+
+## Database Structure
+
+Settings are stored in two Supabase tables:
+
+### Profiles Table
+Stores administrator information:
+```sql
+- id (UUID)
+- first_name (text)
+- last_name (text)
+- email (text)
+- created_at (timestamp)
+```
+
+### Store Config Table
+Stores store-wide settings:
+```sql
+- id (UUID)
+- store_name (text)
+- contact_email (text)
+- shipping_fee (numeric)
+- announcement_bar (text)
+- updated_at (timestamp)
+```
+
+<Note>
+The settings page automatically fetches the first record from `store_config` table. Multi-store configurations require custom development.
+</Note>
+
+## Success Notifications
+
+When settings are successfully saved:
+
+1. Green success banner appears at top
+2. Animation slides in from top
+3. Automatically dismisses after 3 seconds
+4. Database immediately reflects changes
+
+## Error Handling
+
+If saving fails:
+
+1. Alert dialog displays error message
+2. Changes are not saved to database
+3. Review error and try again
+4. Contact support if errors persist
+
+**Common Errors:**
+- Network connection issues
+- Invalid email format
+- Negative shipping fee
+- Database permission errors
+
+## Loading States
+
+While settings load from database:
+
+```
+Cargando configuración de ZÁLEA...
+(Loading ZÁLEA configuration...)
+```
+
+While saving changes:
+
+```
+[Spinner icon] Guardando...
+(Saving...)
+```
+
+## Best Practices
+
+### Regular Updates
+<Check>
+- Review settings monthly
+- Update announcement bar for promotions
+- Adjust shipping fees as needed
+- Keep contact email monitored
+</Check>
+
+### Professional Presentation
+<Check>
+- Use proper capitalization for store name
+- Write clear, customer-friendly announcements
+- Set realistic shipping fees
+- Respond to contact email promptly
+</Check>
+
+### Testing Changes
+<Check>
+- Save and view storefront to verify changes
+- Test announcement bar display
+- Verify shipping fee calculation
+- Confirm contact email receives messages
+</Check>
+
+<Warning>
+Changes to store settings affect all customers immediately. Test shipping fee changes carefully to avoid pricing errors.
+</Warning>
+
+## Future Configuration Options
+
+While not currently available, future updates may include:
+
+- Multi-currency support
+- Variable shipping rates
+- Tax configuration
+- Email template customization
+- Social media links
+- Store hours and policies
