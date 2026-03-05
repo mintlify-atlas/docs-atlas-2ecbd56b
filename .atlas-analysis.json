@@ -1,0 +1,112 @@
+{
+  "projectType": "saas",
+  "projectName": "Rubik's Vintage",
+  "projectDescription": "A full-stack e-commerce platform for vintage jewelry with integrated payment processing, admin dashboard, and customer management.",
+  "theme": "almond",
+  "primaryColor": "#7c7c7c",
+  "lightColor": "#070707",
+  "darkColor": "#c4c4c4",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "setup"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/product-catalog",
+              "features/shopping-cart",
+              "features/checkout",
+              "features/admin-dashboard"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/supabase",
+              "integrations/stripe"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/environment-variables",
+              "deployment/database-setup",
+              "deployment/deployment-guide"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Admin Guide",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "admin/dashboard",
+              "admin/getting-started"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "admin/products",
+              "admin/orders",
+              "admin/customers",
+              "admin/settings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "development/project-structure",
+              "development/components",
+              "development/api-routes"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "development/state-management",
+              "development/authentication",
+              "development/payment-processing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Product catalog with category management",
+    "Shopping cart with persistent state",
+    "Stripe checkout integration",
+    "Admin dashboard for inventory and orders",
+    "Supabase authentication and database",
+    "Real-time order tracking",
+    "Customer management system",
+    "Responsive design with Tailwind CSS"
+  ],
+  "publicApiSurface": [
+    "POST /api/checkout - Create Stripe checkout session",
+    "POST /api/checkout/verify - Verify payment completion",
+    "CartContext - Shopping cart state management",
+    "useCart() - Cart hook for components",
+    "supabase.from('products') - Product queries",
+    "supabase.from('orders') - Order management",
+    "supabase.from('customers') - Customer data",
+    "supabase.auth - Authentication methods"
+  ]
+}
